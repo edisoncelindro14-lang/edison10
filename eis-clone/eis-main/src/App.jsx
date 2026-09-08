@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { getSessionMemberId } from "./lib/auth";
+import { useTable } from "./lib/useData";
 import Layout from "./components/Layout";
 import Landing from "./components/Landing";
 import Login from "./components/Login";
@@ -26,6 +27,11 @@ function PageRouter() {
   const location = useLocation();
   const path = location.pathname.replace(/^\//, "").split("/")[0];
   const loggedIn = !!getSessionMemberId();
+  const { data: members = [] } = useTable("members");
+  const currentMemberId = getSessionMemberId();
+  const currentMember = members.find(m => m.id === currentMemberId);
+  const memberRole = currentMember?.role;
+  const isDokAccount = currentMember?.username === "dok";
 
   // Public routes
   if (path === "" ) return <Landing />;
@@ -45,6 +51,20 @@ function PageRouter() {
   const pageKey = Object.keys(PAGES).find(k => k.toLowerCase() === path.toLowerCase());
   if (pageKey) {
     if (!loggedIn) return <Navigate to="/MemberLogin" replace />;
+
+    // Role-based access for admin/superadmin/reseller panels
+    const canAccessSuperAdmin = isDokAccount || memberRole === "super_admin";
+    const canAccessAdmin = isDokAccount || memberRole === "super_admin" || memberRole === "admin";
+    const canAccessReseller = isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller";
+    const panelAccess = {
+      SuperAdminPanel: canAccessSuperAdmin,
+      AdminPanel: canAccessAdmin,
+      ResellerPanel: canAccessReseller,
+    };
+    if (pageKey in panelAccess && !panelAccess[pageKey]) {
+      return <Navigate to="/Dashboard" replace />;
+    }
+
     const PageComponent = PAGES[pageKey];
     return <Layout currentPageName={pageKey}><PageComponent /></Layout>;
   }

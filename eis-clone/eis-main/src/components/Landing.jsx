@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, LogIn, Smartphone, ShoppingCart, Zap, Shield } from "lucide-react";
 import { Button } from "./ui";
 
-const LOGO_URL = "https://media.base44.com/images/public/69f351e73d5a6169e8e9b7a5/82fc320ca_ChatGPTImageApr28202608_17_52PM.png";
+const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
 const BG_URL = "https://media.base44.com/images/public/6a757d467583dc056bb9db29/acb40a8f7_pngtree-d-render-of-extruded-abstract-background-with-futuristic-black-and-gold-image_3711336.jpg";
 
 const NETWORKS = ["Globe", "Smart", "TM", "TNT", "Sun", "DITO"];

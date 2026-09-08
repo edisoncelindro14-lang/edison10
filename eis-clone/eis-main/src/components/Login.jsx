@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase";
 import { saveMemberSession } from "../lib/auth";
 import { Button, Input, Label } from "./ui";
 
-const LOGO_URL = "https://media.base44.com/images/public/69f351e73d5a6169e8e9b7a5/82fc320ca_ChatGPTImageApr28202608_17_52PM.png";
+const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
 
 export default function Login() {
   const nav = useNavigate();
@@ -35,7 +35,7 @@ export default function Login() {
         setBusy(false);
         return;
       }
-      saveMemberSession(member.id);
+      saveMemberSession(member.id, member.username);
       toast.success(`Welcome back, ${member.full_name}!`);
       nav("/Dashboard");
     } catch (err) {

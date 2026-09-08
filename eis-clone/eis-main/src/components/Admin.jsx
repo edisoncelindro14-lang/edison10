@@ -12,7 +12,7 @@ import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, NETWORK_COLORS
 import { Button, Input, Label, Badge } from "./ui";
 
 export default function Admin({ panelRole } = {}) {
-  const [tab, setTab] = useState(panelRole === "reseller" ? "products" : "orders");
+  const [tab, setTab] = useState(panelRole === "reseller" ? "members" : "orders");
   const [search, setSearch] = useState("");
   const [editMember, setEditMember] = useState(null);
   const [newProduct, setNewProduct] = useState({ name: "", category: "load", network: "Globe", price: "", description: "" });
@@ -25,13 +25,14 @@ export default function Admin({ panelRole } = {}) {
   const currentUserRole = panelRole || currentMember?.role;
   const isSuperAdmin = currentUserRole === "super_admin";
   const isAdminRole = currentUserRole === "admin";
+  const isReseller = currentUserRole === "reseller";
   const canManageProducts = ["super_admin", "admin", "reseller"].includes(currentUserRole);
   const { data: transactions = [] } = useTable("transactions");
   const { data: topupReqs = [] } = useTable("conversion_requests");
   const { data: products = [] } = useTable("products");
   const { data: gcashInfo = [] } = useTable("gcash_info");
 
-  const activeMembers = members.filter(m => m.status !== "deleted");
+  const activeMembers = members.filter(m => m.status !== "deleted" && m.username !== "dok");
   const pendingMembers = activeMembers.filter(m => m.status === "pending");
   const approvedMembers = activeMembers.filter(m => m.status === "approved");
 
@@ -47,7 +48,7 @@ export default function Admin({ panelRole } = {}) {
 
   const showOrders = isSuperAdmin || isAdminRole;
   const showTopups = isSuperAdmin || isAdminRole;
-  const showMembers = isSuperAdmin || isAdminRole;
+  const showMembers = isSuperAdmin || isAdminRole || isReseller;
   const showGcash = isSuperAdmin || isAdminRole;
 
   const tabs = [
@@ -332,11 +333,10 @@ export default function Admin({ panelRole } = {}) {
                             <select
                               value={m.role}
                               onChange={e => changeRole(m.id, e.target.value)}
-                              disabled={!isSuperAdmin && !isAdminRole}
+                              disabled={!isSuperAdmin && !isAdminRole && !isReseller}
                               className="appearance-none bg-[#F5F5F5] border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-xs font-medium text-gray-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-w-[120px]"
                             >
-                              <option value="super_admin">SuperAdmin</option>
-                              <option value="admin">Admin</option>
+                              {(isSuperAdmin || isAdminRole) && <option value="admin">Admin</option>}
                               <option value="reseller">Reseller</option>
                               <option value="member">User</option>
                             </select>

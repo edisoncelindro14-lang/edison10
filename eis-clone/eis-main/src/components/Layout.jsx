@@ -6,7 +6,7 @@ import { useTable, useCurrentMember } from "../lib/useData";
 import { clearMemberSession, getSessionMemberId } from "../lib/auth";
 import { GCashButton } from "./GCashButton";
 
-const LOGO_URL = "https://media.base44.com/images/public/69f351e73d5a6169e8e9b7a5/82fc320ca_ChatGPTImageApr28202608_17_52PM.png";
+const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
 
 const NAV_ITEMS = [
   { name: "Dashboard", icon: LayoutDashboard, path: "Dashboard" },
@@ -31,12 +31,13 @@ export default function Layout({ children, currentPageName }) {
   const memberId = getSessionMemberId();
   const member = memberId ? members.find(m => m.id === memberId) : null;
 
-  const role = member?.role;
+  const memberRole = member?.role;
+  const isDokAccount = member?.username === "dok";
 
   let items = [...NAV_ITEMS];
-  if (role === "super_admin") items = [...items, ...SUPER_ADMIN_ITEMS];
-  if (role === "admin") items = [...items, ...ADMIN_ITEMS];
-  if (role === "reseller") items = [...items, ...RESELLER_ITEMS];
+  if (isDokAccount || memberRole === "super_admin") items = [...items, ...SUPER_ADMIN_ITEMS];
+  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin") items = [...items, ...ADMIN_ITEMS];
+  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...RESELLER_ITEMS];
 
   function handleLogout() {
     clearMemberSession();
