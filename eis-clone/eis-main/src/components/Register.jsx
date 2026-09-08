@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { User, Lock, ArrowLeft, UserPlus, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
@@ -10,8 +10,6 @@ import { Button, Input, Label } from "./ui";
 const LOGO_URL = "https://media.base44.com/images/public/69f351e73d5a6169e8e9b7a5/82fc320ca_ChatGPTImageApr28202608_17_52PM.png";
 
 export default function Register() {
-  const [params] = useSearchParams();
-  const ref = params.get("ref") || "";
   const nav = useNavigate();
   const [form, setForm] = useState({ username: "", password: "", confirm_password: "" });
   const [showPwd, setShowPwd] = useState(false);
@@ -35,23 +33,16 @@ export default function Register() {
         setBusy(false);
         return;
       }
-      let referrerId = null;
-      if (ref) {
-        const { data: referrer } = await supabase.from("members").select("id").eq("referral_code", ref).limit(1);
-        if (referrer?.[0]) referrerId = referrer[0].id;
-      }
       const { error } = await supabase.from("members").insert({
         username: form.username,
         password: form.password,
         full_name: form.username,
         referral_code: generateReferralCode(),
-        referrer_id: referrerId,
         status: "approved",
         role: "member",
-        tree_level: 0,
       });
       if (error) throw error;
-      toast.success("Registration submitted! Admin will review your account.");
+      toast.success("Registration successful! You can now log in.");
       nav("/MemberLogin");
     } catch (err) {
       toast.error(err.message || "Registration failed");
@@ -67,8 +58,8 @@ export default function Register() {
         </Link>
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-8 text-center">
-            <img src={LOGO_URL} alt="Mamlakah" className="w-20 h-20 rounded-2xl mx-auto mb-4 object-cover shadow-lg" />
-            <h1 className="text-2xl font-bold text-white">Mamlakah Registration Form</h1>
+            <img src={LOGO_URL} alt="Kabaro Load" className="w-20 h-20 rounded-2xl mx-auto mb-4 object-cover shadow-lg" />
+            <h1 className="text-2xl font-bold text-white">Kabaro Load Registration Form</h1>
           </div>
           <form onSubmit={submit} className="p-8 space-y-5">
             <div className="space-y-2">

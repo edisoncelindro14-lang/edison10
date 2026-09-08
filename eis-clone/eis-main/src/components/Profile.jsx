@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, ArrowRight, Copy, Check, Save } from "lucide-react";
+import { User, ArrowRight, Save } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, updateRecord } from "../lib/useData";
 import { Button, Input, Label } from "./ui";
@@ -9,7 +9,6 @@ import { Button, Input, Label } from "./ui";
 export default function Profile() {
   const { data: members = [], isLoading } = useTable("members");
   const { currentMember } = useCurrentMember(members);
-  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const [initialized, setInitialized] = useState(false);
@@ -18,14 +17,9 @@ export default function Profile() {
     if (currentMember && !initialized) {
       setForm({
         full_name: currentMember.full_name || "",
-        age: currentMember.age || "",
         email: currentMember.email || "",
         phone: currentMember.phone || "",
-        gcash_number: currentMember.gcash_number || "",
-        gcash_name: currentMember.gcash_name || "",
-        facebook_name: currentMember.facebook_name || "",
         address: currentMember.address || "",
-        backup_mobile: currentMember.backup_mobile || "",
       });
       setInitialized(true);
     }
@@ -51,29 +45,16 @@ export default function Profile() {
     try {
       await updateRecord("members", currentMember.id, form);
       toast.success("Profile updated successfully!");
-      window.location.reload();
     } catch {
       toast.error("Failed to update profile");
     }
     setSaving(false);
   }
 
-  function copyGcash() {
-    if (form.gcash_number) {
-      navigator.clipboard.writeText(form.gcash_number);
-      setCopied(true);
-      toast.success("GCash number copied!");
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }
-
   const fields = [
     { key: "full_name", label: "Full Name" },
-    { key: "age", label: "Age", type: "number" },
     { key: "email", label: "Email", type: "email" },
     { key: "phone", label: "Phone" },
-    { key: "facebook_name", label: "Facebook Name" },
-    { key: "backup_mobile", label: "Backup Mobile" },
     { key: "address", label: "Address" },
   ];
 
@@ -91,7 +72,6 @@ export default function Profile() {
         </div>
       </motion.div>
 
-      {/* Account info card */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
         className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-6">
         <div className="flex items-center gap-4 mb-4">
@@ -105,14 +85,11 @@ export default function Profile() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-          <div><p className="text-xs text-gray-500">Referral Code</p><p className="font-mono font-bold text-gray-900">{currentMember.referral_code || "—"}</p></div>
           <div><p className="text-xs text-gray-500">Status</p><p className="font-bold text-gray-900 capitalize">{currentMember.status}</p></div>
-          <div><p className="text-xs text-gray-500">Tree Level</p><p className="font-bold text-gray-900">{currentMember.tree_level || 0}</p></div>
-          <div><p className="text-xs text-gray-500">Direct Downlines</p><p className="font-bold text-gray-900">{currentMember.direct_downlines_count || 0}</p></div>
+          <div><p className="text-xs text-gray-500">Joined</p><p className="font-bold text-gray-900">{currentMember.created_date ? new Date(currentMember.created_date).toLocaleDateString() : "—"}</p></div>
         </div>
       </motion.div>
 
-      {/* Editable fields */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
         className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Personal Information</h2>
@@ -123,25 +100,6 @@ export default function Profile() {
               <Input value={form[f.key]} onChange={update(f.key)} type={f.type || "text"} />
             </div>
           ))}
-        </div>
-      </motion.div>
-
-      {/* GCash info */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">GCash Details</h2>
-        <div className="space-y-4">
-          <div>
-            <Label>GCash Number</Label>
-            <div className="flex gap-2">
-              <Input value={form.gcash_number} onChange={update("gcash_number")} placeholder="09XX XXX XXXX" className="flex-1" />
-              <Button onClick={copyGcash} variant="outline" className="px-4">{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}</Button>
-            </div>
-          </div>
-          <div>
-            <Label>GCash Name</Label>
-            <Input value={form.gcash_name} onChange={update("gcash_name")} placeholder="Registered name" />
-          </div>
         </div>
       </motion.div>
 

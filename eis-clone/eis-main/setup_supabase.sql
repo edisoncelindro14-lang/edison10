@@ -4,7 +4,7 @@ create table if not exists public.members (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique references auth.users(id) on delete set null,
   username text not null unique,
-  role text not null default 'member' check (role in ('member','sub_admin','admin')),
+  role text not null default 'member' check (role in ('member','sub_admin','admin','super_admin','reseller')),
   referrer_id uuid references public.members(id) on delete set null,
   placement_id uuid references public.members(id) on delete set null,
   placement_order integer check (placement_order between 1 and 10),
@@ -284,5 +284,8 @@ insert into public.system_settings (setting_key, setting_value) values
 on conflict (setting_key) do nothing;
 
 insert into public.members (username, password, full_name, referral_code, status, role, tree_level)
-values ('admin', 'admin123', 'Administrator', 'ADMIN001', 'approved', 'admin', 0)
+values ('admin', 'admin123', 'Administrator', 'ADMIN001', 'approved', 'super_admin', 0)
 on conflict (username) do nothing;
+
+-- Ensure products table has image_url column
+alter table public.products add column if not exists image_url text;

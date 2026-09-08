@@ -128,9 +128,12 @@ insert into public.system_settings (setting_key, setting_value) values
   ('tab_complan_visible', 'true')
 on conflict (setting_key) do nothing;
 
--- ========== CREATE AN ADMIN ACCOUNT ==========
--- Default admin: username "admin", password "admin123"
+-- ========== CREATE A SUPER ADMIN ACCOUNT ==========
+-- Default super admin: username "admin", password "admin123"
 -- Change the password after first login!
 insert into public.members (username, password, full_name, referral_code, status, role, tree_level)
-values ('admin', 'admin123', 'Administrator', 'ADMIN001', 'approved', 'admin', 0)
+values ('admin', 'admin123', 'Administrator', 'ADMIN001', 'approved', 'super_admin', 0)
 on conflict (username) do nothing;
+
+-- Ensure products table has image_url column
+alter table public.products add column if not exists image_url text;

@@ -49,8 +49,8 @@ export default function Login() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-8 text-center">
-            <img src={LOGO_URL} alt="Mamlakah" className="w-20 h-20 rounded-2xl mx-auto mb-4 object-cover shadow-lg" />
-            <h1 className="text-2xl font-bold text-white">Mamlakah Member Log In</h1>
+            <img src={LOGO_URL} alt="Kabaro Load" className="w-20 h-20 rounded-2xl mx-auto mb-4 object-cover shadow-lg" />
+            <h1 className="text-2xl font-bold text-white">Kabaro Load Member Log In</h1>
           </div>
           <form onSubmit={submit} className="p-8 space-y-5">
             <h2 className="text-xl font-bold text-gray-900 text-center">Member Login</h2>

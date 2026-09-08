@@ -1,4 +1,4 @@
-const STORAGE_KEY = "mlm_member_id";
+const STORAGE_KEY = "kabaro_member_id";
 
 export function saveMemberSession(id) {
   localStorage.setItem(STORAGE_KEY, id);

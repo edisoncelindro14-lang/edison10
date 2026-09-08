@@ -1,25 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, GitBranch, Users, Wallet, Layers, User, Shield, LogOut, Menu, X, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Smartphone, Wallet, ShoppingBag, User, Shield, LogOut, Menu, X, ChevronRight, Crown, Store } from "lucide-react";
 import { useTable, useCurrentMember } from "../lib/useData";
 import { clearMemberSession, getSessionMemberId } from "../lib/auth";
-import { supabase } from "../lib/supabase";
-import { MaintenanceBanner } from "./MaintenanceBanner";
 import { GCashButton } from "./GCashButton";
 
 const LOGO_URL = "https://media.base44.com/images/public/69f351e73d5a6169e8e9b7a5/82fc320ca_ChatGPTImageApr28202608_17_52PM.png";
 
 const NAV_ITEMS = [
   { name: "Dashboard", icon: LayoutDashboard, path: "Dashboard" },
-  { name: "Mamlakah Tree", icon: GitBranch, path: "Genealogy" },
-  { name: "1st Level Monitoring", icon: Users, path: "Monitoring" },
-  { name: "Total Withdrawal", icon: Wallet, path: "Earnings" },
-  { name: "Mamlakah ComPlan", icon: Layers, path: "LevelBonuses" },
+  { name: "Buy Load & SIM", icon: Smartphone, path: "Products" },
+  { name: "My Wallet", icon: Wallet, path: "Wallet" },
+  { name: "My Orders", icon: ShoppingBag, path: "Orders" },
   { name: "My Profile", icon: User, path: "Profile" },
 ];
-const ADMIN_ITEMS = [{ name: "Admin Panel", icon: Shield, path: "Admin" }];
-const SUBADMIN_ITEMS = [{ name: "Sub-Admin Panel", icon: Shield, path: "SubAdmin" }];
+const SUPER_ADMIN_ITEMS = [{ name: "Super Admin Panel", icon: Crown, path: "SuperAdminPanel" }];
+const ADMIN_ITEMS = [{ name: "Admin Panel", icon: Shield, path: "AdminPanel" }];
+const RESELLER_ITEMS = [{ name: "Reseller Panel", icon: Store, path: "ResellerPanel" }];
 
 function navPath(path) {
   return "/" + path;
@@ -30,42 +28,15 @@ export default function Layout({ children, currentPageName }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { data: members = [] } = useTable("members");
-  const { data: settings = [], refetch: refetchSettings } = useTable("system_settings");
   const memberId = getSessionMemberId();
   const member = memberId ? members.find(m => m.id === memberId) : null;
 
-  // Real-time update: refetch settings when system_settings changes (e.g. admin toggles tab visibility)
-  useEffect(() => {
-    const channel = supabase
-      .channel("system_settings_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "system_settings" }, () => refetchSettings())
-      .subscribe();
-    // Polling fallback in case realtime is not enabled
-    const interval = setInterval(() => refetchSettings(), 3000);
-    return () => { supabase.removeChannel(channel); clearInterval(interval); };
-  }, [refetchSettings]);
+  const role = member?.role;
 
-  const settingsMap = {};
-  settings.forEach(s => { settingsMap[s.setting_key] = s.setting_value; });
-  const showMonitoring = settingsMap.tab_monitoring_visible !== "false";
-  const showSubAdmin = settingsMap.tab_subadmin_visible !== "false";
-  const showComPlan = settingsMap.tab_complan_visible !== "false";
-
-  const isAdmin = member?.role === "admin";
-  const isSubAdmin = member?.role === "sub_admin";
-
-  let items = NAV_ITEMS.filter(item => {
-    if (item.path === "Monitoring") return showMonitoring;
-    if (item.path === "LevelBonuses") return showComPlan;
-    return true;
-  });
-  if (isAdmin) items = [...items, ...ADMIN_ITEMS];
-  if (isSubAdmin) items = [...items, ...SUBADMIN_ITEMS];
-  if (isAdmin || showSubAdmin) {
-    if (!isSubAdmin && !isAdmin) {
-      // no sub-admin for regular members
-    }
-  }
+  let items = [...NAV_ITEMS];
+  if (role === "super_admin") items = [...items, ...SUPER_ADMIN_ITEMS];
+  if (role === "admin") items = [...items, ...ADMIN_ITEMS];
+  if (role === "reseller") items = [...items, ...RESELLER_ITEMS];
 
   function handleLogout() {
     clearMemberSession();
@@ -81,8 +52,8 @@ export default function Layout({ children, currentPageName }) {
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-gray-100 z-50 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src={LOGO_URL} alt="Mamlakah" className="w-10 h-10 rounded-xl object-cover" />
-          <span className="font-bold text-xl text-gray-900">Mamlakah</span>
+          <img src={LOGO_URL} alt="Kabaro Load" className="w-10 h-10 rounded-xl object-cover" />
+          <span className="font-bold text-xl text-gray-900">Kabaro Load</span>
         </div>
         <button onClick={() => setMobileOpen(true)} className="p-2 rounded-lg hover:bg-gray-100">
           <Menu className="w-6 h-6 text-gray-700" />
@@ -93,10 +64,10 @@ export default function Layout({ children, currentPageName }) {
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-100 flex-col z-40">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <img src={LOGO_URL} alt="Mamlakah" className="w-10 h-10 rounded-xl object-cover" />
+            <img src={LOGO_URL} alt="Kabaro Load" className="w-10 h-10 rounded-xl object-cover" />
             <div>
-              <p className="font-bold text-xl text-gray-900">Mamlakah</p>
-              <p className="text-xs text-gray-500">Mamlakah Network System</p>
+              <p className="font-bold text-xl text-gray-900">Kabaro Load</p>
+              <p className="text-xs text-gray-500">Load & SIM Online Shop</p>
             </div>
           </div>
         </div>
@@ -138,8 +109,8 @@ export default function Layout({ children, currentPageName }) {
             >
               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img src={LOGO_URL} alt="Mamlakah" className="w-10 h-10 rounded-xl object-cover" />
-                  <span className="font-bold text-xl text-gray-900">Mamlakah</span>
+                  <img src={LOGO_URL} alt="Kabaro Load" className="w-10 h-10 rounded-xl object-cover" />
+                  <span className="font-bold text-xl text-gray-900">Kabaro Load</span>
                 </div>
                 <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-gray-100">
                   <X className="w-5 h-5" />
@@ -175,7 +146,6 @@ export default function Layout({ children, currentPageName }) {
       </AnimatePresence>
 
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
-        <MaintenanceBanner />
         {children}
         <GCashButton />
       </main>
