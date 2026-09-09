@@ -64,15 +64,20 @@ export function useCurrentMember(members = []) {
   return { currentMember, loading };
 }
 
-// Mutation helper
+// Mutation helpers — throw on Supabase error so callers' catch blocks fire
 export async function createRecord(tableName, data) {
-  return supabase.from(tableName).insert(data).select().single();
+  const { data: result, error } = await supabase.from(tableName).insert(data).select().single();
+  if (error) throw error;
+  return result;
 }
 
 export async function updateRecord(tableName, id, data) {
-  return supabase.from(tableName).update(data).eq("id", id).select().single();
+  const { data: result, error } = await supabase.from(tableName).update(data).eq("id", id).select().single();
+  if (error) throw error;
+  return result;
 }
 
 export async function deleteRecord(tableName, id) {
-  return supabase.from(tableName).delete().eq("id", id);
+  const { error } = await supabase.from(tableName).delete().eq("id", id);
+  if (error) throw error;
 }

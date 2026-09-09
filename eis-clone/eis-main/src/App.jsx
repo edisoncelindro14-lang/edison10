@@ -17,10 +17,13 @@ import Admin from "./components/Admin";
 import SuperAdminPanel from "./components/SuperAdminPanel";
 import AdminPanel from "./components/AdminPanel";
 import ResellerPanel from "./components/ResellerPanel";
+import JoytelTest from "./components/JoytelTest";
+import JoytelDealerLogin from "./components/JoytelDealerLogin";
+import JoytelDashboard from "./components/JoytelDashboard";
 
 const PAGES = {
   Dashboard, Products, Wallet, Orders, Profile, Admin,
-  SuperAdminPanel, AdminPanel, ResellerPanel,
+  SuperAdminPanel, AdminPanel, ResellerPanel, JoytelTest, JoytelDealerLogin, JoytelDashboard,
 };
 
 function PageRouter() {
@@ -34,7 +37,7 @@ function PageRouter() {
   const isDokAccount = currentMember?.username === "dok";
 
   // Public routes
-  if (path === "" ) return <Landing />;
+  if (path === "" ) return <Layout currentPageName="Kabaro Shop"><Products /></Layout>;
   if (path === "MemberLogin") return <Layout currentPageName="MemberLogin"><Login /></Layout>;
   if (path === "Register") return <Layout currentPageName="Register"><Register /></Layout>;
 
@@ -56,10 +59,14 @@ function PageRouter() {
     const canAccessSuperAdmin = isDokAccount || memberRole === "super_admin";
     const canAccessAdmin = isDokAccount || memberRole === "super_admin" || memberRole === "admin";
     const canAccessReseller = isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller";
+    const canAccessJoytel = canAccessReseller; // admin, super_admin, reseller
     const panelAccess = {
       SuperAdminPanel: canAccessSuperAdmin,
       AdminPanel: canAccessAdmin,
       ResellerPanel: canAccessReseller,
+      JoytelDashboard: canAccessJoytel,
+      JoytelTest: canAccessJoytel,
+      JoytelDealerLogin: canAccessJoytel,
     };
     if (pageKey in panelAccess && !panelAccess[pageKey]) {
       return <Navigate to="/Dashboard" replace />;
