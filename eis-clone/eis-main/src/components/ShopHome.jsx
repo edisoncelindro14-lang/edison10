@@ -199,7 +199,7 @@ export default function ShopHome({ readOnly = false }) {
         const details = item.category === "load"
           ? `${item.name} x${item.qty} → ${mobileNumber}`
           : `${item.name} x${item.qty} → ${address}`;
-        await createRecord("transactions", { member_id: currentMember.id, type: "purchase", amount: -(item.price * item.qty), description: details, status: "pending" });
+        await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -(item.price * item.qty), description: details, status: "pending" });
       }
       toast.success("Order placed successfully! Admin will process it shortly.");
       setCart([]); setMobileNumber(""); setAddress(""); setCheckoutOpen(false);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Smartphone, Wallet, ShoppingBag, User, Shield, LogOut, Menu, X, ChevronRight, Crown, Store } from "lucide-react";
+import { LayoutDashboard, Smartphone, Wallet, ShoppingBag, User, Shield, LogOut, Menu, X, ChevronRight, Crown, Store, Radio, ExternalLink } from "lucide-react";
 import { useTable, useCurrentMember } from "../lib/useData";
 import { clearMemberSession, getSessionMemberId } from "../lib/auth";
 import { GCashButton } from "./GCashButton";
@@ -14,6 +14,12 @@ const NAV_ITEMS = [
   { name: "My Wallet", icon: Wallet, path: "Wallet" },
   { name: "My Orders", icon: ShoppingBag, path: "Orders" },
   { name: "My Profile", icon: User, path: "Profile" },
+];
+
+const JOYTEL_ITEMS = [
+  { name: "JoyTel Dashboard", icon: Radio, path: "JoytelDashboard" },
+  { name: "JoyTel Test", icon: Radio, path: "JoytelTest" },
+  { name: "JoyTel Login", icon: ExternalLink, path: "JoytelDealerLogin" },
 ];
 const SUPER_ADMIN_ITEMS = [{ name: "Super Admin Panel", icon: Crown, path: "SuperAdminPanel" }];
 const ADMIN_ITEMS = [{ name: "Admin Panel", icon: Shield, path: "AdminPanel" }];
@@ -38,6 +44,7 @@ export default function Layout({ children, currentPageName }) {
   if (isDokAccount || memberRole === "super_admin") items = [...items, ...SUPER_ADMIN_ITEMS];
   if (isDokAccount || memberRole === "super_admin" || memberRole === "admin") items = [...items, ...ADMIN_ITEMS];
   if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...RESELLER_ITEMS];
+  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...JOYTEL_ITEMS];
 
   function handleLogout() {
     clearMemberSession();

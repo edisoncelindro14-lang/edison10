@@ -5,7 +5,7 @@ import { ArrowRight, LogIn, Smartphone, ShoppingCart, Zap, Shield } from "lucide
 import { Button } from "./ui";
 
 const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
-const BG_URL = "https://media.base44.com/images/public/6a757d467583dc056bb9db29/acb40a8f7_pngtree-d-render-of-extruded-abstract-background-with-futuristic-black-and-gold-image_3711336.jpg";
+const BG_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/4e11a0472_HD-wallpaper-nautica-pagoh-sailor-sea-seafarer-seaman-ship-tanker.jpg";
 
 const NETWORKS = ["Globe", "Smart", "TM", "TNT", "Sun", "DITO"];
 
@@ -57,7 +57,7 @@ export default function Landing() {
           className="relative max-w-4xl mx-auto"
         >
           <div className="flex justify-center mb-6">
-            <img src={LOGO_URL} alt="Kabaro Load" className="w-24 h-24 rounded-2xl object-cover shadow-2xl" />
+            <img src={LOGO_URL} alt="Kabaro Load" className="w-40 h-40 rounded-3xl object-cover shadow-2xl" />
           </div>
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold leading-tight mb-6">
             Buy Load & SIM Cards

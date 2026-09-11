@@ -73,7 +73,7 @@ export default function ProductDetail({ productId }) {
     setBuying(true);
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
-      await createRecord("transactions", { member_id: currentMember.id, type: "purchase", amount: -(product.price * qty), description: details, status: "pending" });
+      await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -(product.price * qty), description: details, status: "pending" });
       toast.success("Order placed successfully! Admin will process it shortly.");
       nav("/Orders");
     } catch { toast.error("Failed to place order"); }

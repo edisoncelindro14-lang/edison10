@@ -1,12 +1,35 @@
 import React, { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil } from "lucide-react";
+import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
+
+const SORT_ORDER_KEY = "kabaro_product_sort_order";
+
+function loadSortOrder() {
+  try { return JSON.parse(localStorage.getItem(SORT_ORDER_KEY) || "[]"); } catch { return []; }
+}
+
+function saveSortOrder(ids) {
+  localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(ids));
+}
+
+function sortByStoredOrder(products) {
+  const order = loadSortOrder();
+  if (!order.length) return products;
+  const indexMap = {};
+  order.forEach((id, i) => { indexMap[id] = i; });
+  return [...products].sort((a, b) => {
+    const aIdx = indexMap[a.id] ?? 9999;
+    const bIdx = indexMap[b.id] ?? 9999;
+    if (aIdx !== bIdx) return aIdx - bIdx;
+    return 0;
+  });
+}
 
 export default function Products() {
   const nav = useNavigate();
@@ -19,11 +42,13 @@ export default function Products() {
   const [address, setAddress] = useState("");
   const [buying, setBuying] = useState(false);
   const [editProduct, setEditProduct] = useState(null); // null = closed, {} = new, {id...} = editing
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const [sortVersion, setSortVersion] = useState(0);
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: products = [], refetch: refetchProducts } = useTable("products");
+  const { data: products = [], refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
   const memberRole = currentMember?.role;
@@ -32,12 +57,13 @@ export default function Products() {
   const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
   // For admin/reseller, show ALL products (including inactive). For regular users, only active.
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
+  const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
 
   const walletBalance = currentMember
     ? transactions.filter(t => t.member_id === currentMember.id && t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0)
     : 0;
 
-  const filtered = visibleProducts.filter(p => {
+  const filtered = orderedProducts.filter(p => {
     if (filterNetwork !== "all" && p.network !== filterNetwork) return false;
     if (filterCategory !== "all" && p.category !== filterCategory) return false;
     if (search) {
@@ -66,9 +92,50 @@ export default function Products() {
     setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i));
   }
 
-  function handleEditSaved() {
+  function handleEditSaved(updatedProduct) {
+    const scrollY = window.scrollY;
+    if (updatedProduct?.id) {
+      const exists = products.some(p => String(p.id) === String(updatedProduct.id));
+      if (exists) {
+        updateLocalRecord(updatedProduct.id, updatedProduct);
+      } else {
+        addLocalRecord(updatedProduct);
+      }
+    } else {
+      refetchProducts();
+    }
     setEditProduct(null);
-    refetchProducts();
+    requestAnimationFrame(() => window.scrollTo(0, scrollY));
+  }
+
+  function handleDragStart(e, id) {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (id !== draggedId) setDragOverId(id);
+  }
+
+  function handleDrop(e, targetId) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return; }
+    const currentOrder = filtered.map(p => p.id);
+    const fromIdx = currentOrder.indexOf(draggedId);
+    const toIdx = currentOrder.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return; }
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, draggedId);
+    // Merge with any existing stored order for products not in current filter
+    const stored = loadSortOrder().filter(id => !newOrder.includes(id));
+    saveSortOrder([...newOrder, ...stored]);
+    setDraggedId(null);
+    setDragOverId(null);
+    setSortVersion(v => v + 1);
   }
 
   async function handleCheckout() {
@@ -120,14 +187,16 @@ export default function Products() {
 
       {/* Wallet balance + Cart button */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
-          <Wallet className="w-5 h-5 text-emerald-600" />
-          <div>
-            <p className="text-xs text-emerald-600">Wallet Balance</p>
-            <p className="font-bold text-emerald-700 text-lg">{money(walletBalance)}</p>
+        {currentMember && (
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
+            <Wallet className="w-5 h-5 text-emerald-600" />
+            <div>
+              <p className="text-xs text-emerald-600">Wallet Balance</p>
+              <p className="font-bold text-emerald-700 text-lg">{money(walletBalance)}</p>
+            </div>
+            <Link to="/Wallet"><Button size="sm" variant="outline" className="ml-2 border-emerald-300 text-emerald-700">Top Up</Button></Link>
           </div>
-          <Link to="/Wallet"><Button size="sm" variant="outline" className="ml-2 border-emerald-300 text-emerald-700">Top Up</Button></Link>
-        </div>
+        )}
         <button onClick={() => setCheckoutOpen(true)} className="relative flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition-all">
           <ShoppingCart className="w-5 h-5" /> Cart
           {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
@@ -158,7 +227,12 @@ export default function Products() {
           const isAvailable = p.is_active !== false;
           return (
             <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-              className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden hover:shadow-lg hover:border-amber-300 transition-all relative group"
+              draggable={canManage}
+              onDragStart={(e) => handleDragStart(e, p.id)}
+              onDragOver={(e) => handleDragOver(e, p.id)}
+              onDrop={(e) => handleDrop(e, p.id)}
+              onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${canManage ? "cursor-grab active:cursor-grabbing" : ""}`}
               onClick={() => nav(`/Products/${p.id}`)}>
               {/* Not Available stamp */}
               {!isAvailable && (
@@ -166,12 +240,17 @@ export default function Products() {
                   <span className="text-white font-extrabold text-lg bg-red-600 px-4 py-1 rounded-lg shadow-lg rotate-12">NOT AVAILABLE</span>
                 </div>
               )}
-              {/* Edit button for admin/reseller */}
+              {/* Drag handle + Edit button for admin/reseller */}
               {canManage && (
-                <button onClick={(e) => { e.stopPropagation(); setEditProduct(p); }}
-                  className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
-                  <Pencil className="w-3.5 h-3.5 text-gray-600" />
-                </button>
+                <>
+                  <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
+                    <GripVertical className="w-3.5 h-3.5 text-gray-500" />
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setEditProduct(p); }}
+                    className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
+                    <Pencil className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                </>
               )}
               <div className="h-24 overflow-hidden">
                 {p.image_url ? (

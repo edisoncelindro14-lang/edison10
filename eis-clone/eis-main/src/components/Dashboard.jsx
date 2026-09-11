@@ -20,7 +20,7 @@ export default function Dashboard() {
     .filter(t => t.status === "completed")
     .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
-  const myOrders = myTx.filter(t => t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const myOrders = myTx.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const recentOrders = myOrders.slice(0, 5);
 
   const featuredProducts = allProducts.filter(p => p.is_active !== false).slice(0, 6);

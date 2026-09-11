@@ -3,14 +3,17 @@ const https = require('https');
 const { URL } = require('url');
 
 const PORT = process.env.PROXY_PORT || 8000;
-const JOYTEL_API_BASE = process.env.JOYTEL_API_BASE || 'https://api.joytel.com';
 const PROXY_TOKEN = process.env.PROXY_TOKEN || 'kabaroload-proxy-2024';
+
+// JoyTel API base URLs
+const WAREHOUSE_BASE = 'https://api.joytelshop.com';
+const RSP_BASE = 'https://esim.joytelecom.com/openapi';
 
 const server = http.createServer((req, res) => {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Proxy-Token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Proxy-Token, AppId, AppSecret, TransId, Timestamp, Ciphertext');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -21,7 +24,7 @@ const server = http.createServer((req, res) => {
   // Health check
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', service: 'joytel-proxy', ip: '34.11.209.212' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'joytel-proxy' }));
     return;
   }
 
@@ -33,21 +36,36 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Extract JoyTel API path from the URL
-  // Expected format: /joytel/api/v1/orders → forwards to JOYTEL_API_BASE/api/v1/orders
+  // Route based on path prefix:
+  // /warehouse/<endpoint> → https://api.joytelshop.com/<endpoint>
+  // /rsp/<endpoint>       → https://esim.joytelecom.com/openapi/<endpoint>
   let apiPath = req.url;
-  if (apiPath.startsWith('/joytel')) {
+  let targetBase;
+
+  if (apiPath.startsWith('/warehouse/')) {
+    apiPath = apiPath.replace('/warehouse', '');
+    targetBase = WAREHOUSE_BASE;
+  } else if (apiPath.startsWith('/rsp/')) {
+    apiPath = apiPath.replace('/rsp', '');
+    targetBase = RSP_BASE;
+  } else if (apiPath.startsWith('/joytel')) {
+    // Legacy: forward to warehouse
     apiPath = apiPath.replace('/joytel', '');
+    targetBase = WAREHOUSE_BASE;
+  } else {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Unknown route prefix. Use /warehouse/ or /rsp/' }));
+    return;
   }
 
-  const targetUrl = new URL(apiPath, JOYTEL_API_BASE);
+  // Use string concatenation (not new URL) to preserve the base path (e.g. /openapi)
+  const targetUrl = new URL(targetBase + apiPath);
 
   // Collect request body
   let body = [];
   req.on('data', chunk => body.push(chunk));
   req.on('end', () => {
     const bodyBuffer = Buffer.concat(body);
-    const isJsonBody = req.headers['content-type']?.includes('application/json');
 
     const options = {
       hostname: targetUrl.hostname,
@@ -61,9 +79,12 @@ const server = http.createServer((req, res) => {
       },
     };
 
-    // Forward Authorization header if present
-    if (req.headers['authorization']) {
-      options.headers['Authorization'] = req.headers['authorization'];
+    // Forward auth headers
+    const forwardHeaders = ['authorization', 'appid', 'appsecret', 'transid', 'timestamp', 'ciphertext'];
+    for (const h of forwardHeaders) {
+      if (req.headers[h]) {
+        options.headers[h] = req.headers[h];
+      }
     }
 
     const proxyReq = https.request(options, (proxyRes) => {
@@ -91,8 +112,26 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// Root info route
+  if (req.url === '/' || req.url === '') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', service: 'joytel-proxy', routes: ['/warehouse/*', '/rsp/*', '/health'] }));
+    return;
+  }
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`JoyTel proxy server running on port ${PORT}`);
-  console.log(`Forwarding to: ${JOYTEL_API_BASE}`);
-  console.log(`Outbound IP: 34.11.209.212`);
+  console.log(`Warehouse API: ${WAREHOUSE_BASE}`);
+  console.log(`RSP+ API: ${RSP_BASE}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down...');
+  server.close(() => process.exit(0));
+});
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down...');
+  server.close(() => process.exit(0));
 });

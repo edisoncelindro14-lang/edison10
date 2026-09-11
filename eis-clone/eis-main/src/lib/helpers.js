@@ -60,7 +60,10 @@ export const TRANSACTION_TYPES = {
   topup: { label: "Wallet Top-up", color: "bg-emerald-100 text-emerald-700" },
   purchase: { label: "Purchase", color: "bg-blue-100 text-blue-700" },
   refund: { label: "Refund", color: "bg-amber-100 text-amber-700" },
-  adjustment: { label: "Adjustment", color: "bg-gray-100 text-gray-700" },
+  adjustment: { label: "Wallet Top-up", color: "bg-emerald-100 text-emerald-700" },
+  level_bonus: { label: "Level Bonus", color: "bg-purple-100 text-purple-700" },
+  referral_bonus: { label: "Referral Bonus", color: "bg-indigo-100 text-indigo-700" },
+  withdrawal: { label: "Purchase", color: "bg-blue-100 text-blue-700" },
 };
 
 export function generateReferralCode() {

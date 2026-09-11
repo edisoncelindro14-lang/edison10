@@ -35,7 +35,7 @@ export default function Wallet() {
 
   const myTx = transactions.filter(t => t.member_id === currentMember.id);
   const walletBalance = myTx.filter(t => t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  const totalSpent = myTx.filter(t => t.type === "purchase" && t.status === "completed").reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
+  const totalSpent = myTx.filter(t => (t.type === "withdrawal" || t.type === "purchase") && t.status === "completed").reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
   const myTopupReqs = topupReqs.filter(r => r.member_id === currentMember.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   async function handleTopup() {
@@ -138,7 +138,7 @@ export default function Wallet() {
           <div className="divide-y divide-gray-50">
             {myTx.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(tx => {
               const typeInfo = TRANSACTION_TYPES[tx.type] || { label: tx.type, color: "bg-gray-100 text-gray-700" };
-              const isPurchase = tx.type === "purchase";
+              const isPurchase = tx.type === "withdrawal" || tx.type === "purchase";
               return (
                 <div key={tx.id} className="flex items-center justify-between px-6 py-4">
                   <div>
