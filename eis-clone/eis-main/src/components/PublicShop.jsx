@@ -53,7 +53,7 @@ export default function PublicShop({ children }) {
       </header>
 
       {/* Shop content or product detail */}
-      {children || <ShopHome />}
+      {children || <ShopHome readOnly />}
     </div>
   );
 }

@@ -103,7 +103,7 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
   );
 }
 
-export default function ShopHome() {
+export default function ShopHome({ readOnly = false }) {
   const nav = useNavigate();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -123,7 +123,7 @@ export default function ShopHome() {
   const { currentMember } = useCurrentMember(members);
 
   const memberRole = currentMember?.role;
-  const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
+  const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
 
   const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
@@ -216,7 +216,7 @@ export default function ShopHome() {
         className="relative bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-3xl overflow-hidden mb-8">
         <div className="px-6 py-10 sm:px-12 sm:py-16">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900">
-            MORE<span className="text-indigo-600"> FREE SHIPPING!</span>
+            KABARO<span className="text-indigo-600"> ONLINE SHOP!</span>
           </h1>
           <p className="text-gray-500 mt-3 text-lg">Browse and purchase prepaid load and SIM cards for all networks.</p>
           <div className="flex gap-3 mt-6">
