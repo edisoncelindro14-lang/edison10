@@ -54,7 +54,7 @@ export default function Admin({ panelRole } = {}) {
   });
 
   const showOrders = isSuperAdmin || isAdminRole;
-  const showTopups = isSuperAdmin || isAdminRole;
+  const showTopups = isSuperAdmin || isAdminRole || isReseller;
   const showMembers = isSuperAdmin || isAdminRole || isReseller;
   const showGcash = isSuperAdmin || isAdminRole;
 
