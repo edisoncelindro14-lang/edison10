@@ -5,4 +5,5 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "placeholder-a
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  global: { fetch: (url, options = {}) => fetch(url, { ...options, cache: "no-store" }) },
 });

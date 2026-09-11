@@ -119,13 +119,13 @@ export default function ShopHome({ readOnly = false }) {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: products = [], refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
   const memberRole = currentMember?.role;
   const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
 
-  const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
+  const allProducts = products.length > 0 ? products : (productsLoading ? FALLBACK_PRODUCTS : []);
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
   const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
 

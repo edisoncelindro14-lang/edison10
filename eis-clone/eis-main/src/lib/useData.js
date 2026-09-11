@@ -41,6 +41,13 @@ export function useTable(tableName, options = {}) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Refetch on window focus so users always see fresh data (e.g. after admin updates in another tab/browser)
+  useEffect(() => {
+    const onFocus = () => fetchData();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchData]);
+
   // Real-time subscription: refetch when table changes so wallet/orders update instantly
   useEffect(() => {
     if (!enabled) return;
