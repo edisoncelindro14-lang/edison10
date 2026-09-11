@@ -5,10 +5,11 @@ import { getSessionMemberId } from "./lib/auth";
 import { useTable } from "./lib/useData";
 import Layout from "./components/Layout";
 import Landing from "./components/Landing";
+import PublicShop from "./components/PublicShop";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Dashboard from "./components/Dashboard";
-import Products from "./components/Products";
+import ShopHome from "./components/ShopHome";
 import ProductDetail from "./components/ProductDetail";
 import Wallet from "./components/Wallet";
 import Orders from "./components/Orders";
@@ -22,7 +23,7 @@ import JoytelDealerLogin from "./components/JoytelDealerLogin";
 import JoytelDashboard from "./components/JoytelDashboard";
 
 const PAGES = {
-  Dashboard, Products, Wallet, Orders, Profile, Admin,
+  Dashboard, Products: ShopHome, Wallet, Orders, Profile, Admin,
   SuperAdminPanel, AdminPanel, ResellerPanel, JoytelTest, JoytelDealerLogin, JoytelDashboard,
 };
 
@@ -37,16 +38,15 @@ function PageRouter() {
   const isDokAccount = currentMember?.username === "dok";
 
   // Public routes
-  if (path === "" ) return <Layout currentPageName="Kabaro Shop"><Products /></Layout>;
+  if (path === "" ) return <PublicShop />;
   if (path === "MemberLogin") return <Layout currentPageName="MemberLogin"><Login /></Layout>;
   if (path === "Register") return <Layout currentPageName="Register"><Register /></Layout>;
 
-  // Product detail route: /Products/:id
+  // Product detail route: /Products/:id — public, no login required
   if (path.toLowerCase() === "products") {
     const parts = location.pathname.replace(/^\//, "").split("/");
     if (parts.length > 1 && parts[1]) {
-      if (!loggedIn) return <Navigate to="/MemberLogin" replace />;
-      return <Layout currentPageName="Products"><ProductDetail /></Layout>;
+      return <PublicShop><ProductDetail productId={parts[1]} /></PublicShop>;
     }
   }
 

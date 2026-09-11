@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet } from "lucide-react";
+import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
@@ -221,7 +221,7 @@ export default function ShopHome() {
           <p className="text-gray-500 mt-3 text-lg">Browse and purchase prepaid load and SIM cards for all networks.</p>
           <div className="flex gap-3 mt-6">
             <a href="#all-products"><Button className="bg-indigo-600 hover:bg-indigo-700 text-white">Shop Now <ArrowRight className="w-4 h-4 ml-1" /></Button></a>
-            <Link to="/MemberLogin"><Button variant="outline" className="border-gray-300">Log In</Button></Link>
+            {!currentMember && <Link to="/MemberLogin"><Button variant="outline" className="border-gray-300">Log In</Button></Link>}
           </div>
           <div className="flex gap-8 mt-8">
             <div><p className="text-2xl font-extrabold text-gray-900">{allProducts.length}+</p><p className="text-xs text-gray-400 uppercase">Products</p></div>
@@ -230,6 +230,33 @@ export default function ShopHome() {
           </div>
         </div>
       </motion.div>
+
+      {/* Wallet + Cart bar for logged-in users */}
+      {currentMember && (
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
+            <Wallet className="w-5 h-5 text-emerald-600" />
+            <div>
+              <p className="text-xs text-emerald-600">Wallet Balance</p>
+              <p className="font-bold text-emerald-700 text-lg">{money(walletBalance)}</p>
+            </div>
+            <Link to="/Wallet"><Button size="sm" variant="outline" className="ml-2 border-emerald-300 text-emerald-700">Top Up</Button></Link>
+          </div>
+          <button onClick={() => setCheckoutOpen(true)} className="relative flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition-all">
+            <ShoppingCart className="w-5 h-5" /> Cart
+            {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
+          </button>
+        </div>
+      )}
+      {/* Cart button for guests */}
+      {!currentMember && cart.length > 0 && (
+        <div className="flex justify-end mb-6">
+          <button onClick={() => setCheckoutOpen(true)} className="relative flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition-all">
+            <ShoppingCart className="w-5 h-5" /> Cart
+            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">{cart.length}</span>
+          </button>
+        </div>
+      )}
 
       {/* Featured Products */}
       {featured.length > 0 && (
