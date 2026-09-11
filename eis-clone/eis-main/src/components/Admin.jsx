@@ -1,23 +1,28 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X, Plus,
-  Search, Download, Copy, Trash2, RotateCcw, UserCog, Upload, Crown, Store, Zap,
+  Search, Download, Copy, Trash2, RotateCcw, UserCog, Upload, Crown, Store, Zap, Camera, Maximize2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, updateRecord, createRecord, deleteRecord } from "../lib/useData";
 import { supabase } from "../lib/supabase";
 import { getSessionMemberId } from "../lib/auth";
-import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS } from "../lib/helpers";
+import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, formatOrderNumber } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
 
 export default function Admin({ panelRole } = {}) {
-  const [tab, setTab] = useState(panelRole === "reseller" ? "members" : "orders");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || (panelRole === "reseller" ? "members" : "orders");
+  const [tab, setTab] = useState(initialTab);
   const [search, setSearch] = useState("");
+  const [orderSearch, setOrderSearch] = useState("");
   const [editMember, setEditMember] = useState(null);
   const [newProduct, setNewProduct] = useState({ name: "", category: "load", network: "Globe", price: "", description: "" });
   const [productImage, setProductImage] = useState(null);
   const [gcash, setGcash] = useState({ gcash_number: "", gcash_name: "" });
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   const { data: members = [] } = useTable("members");
   const memberId = getSessionMemberId();
@@ -31,6 +36,8 @@ export default function Admin({ panelRole } = {}) {
   const { data: topupReqs = [] } = useTable("conversion_requests");
   const { data: products = [] } = useTable("products");
   const { data: gcashInfo = [] } = useTable("gcash_info");
+  const { data: allSettings = [] } = useTable("system_settings");
+  const joytelScreenshots = allSettings.filter(s => s.setting_key?.startsWith("joytel_screenshot_"));
 
   const activeMembers = members.filter(m => m.status !== "deleted" && m.username !== "dok");
   const pendingMembers = activeMembers.filter(m => m.status === "pending");
@@ -57,6 +64,7 @@ export default function Admin({ panelRole } = {}) {
     ...(showMembers ? [{ id: "members", label: `Members (${activeMembers.length})`, icon: Users }] : []),
     { id: "products", label: "Products", icon: Store },
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
+    { id: "joytel_screenshots", label: `JoyTel Screenshots${joytelScreenshots.length > 0 ? ` (${joytelScreenshots.length})` : ""}`, icon: Camera },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -183,10 +191,10 @@ export default function Admin({ panelRole } = {}) {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Total Members", value: activeMembers.length, icon: Users, color: "from-amber-500 to-orange-600" },
-          { label: "Pending Orders", value: purchaseOrders.filter(o => o.status === "pending").length, icon: ShoppingBag, color: "from-blue-500 to-indigo-600" },
-          { label: "Pending Top-ups", value: pendingTopups.length, icon: Wallet, color: "from-emerald-500 to-teal-600" },
-          { label: "Products", value: allProducts.length, icon: Smartphone, color: "from-purple-500 to-pink-600" },
+          { label: "Total Products", value: allProducts.length, icon: Smartphone, color: "from-purple-500 to-pink-600" },
+          { label: "Total Orders", value: purchaseOrders.length, icon: ShoppingBag, color: "from-blue-500 to-indigo-600" },
+          { label: "Pending Orders", value: purchaseOrders.filter(o => o.status === "pending").length, icon: Wallet, color: "from-amber-500 to-orange-600" },
+          { label: "Total Revenue", value: money(purchaseOrders.filter(o => o.status === "completed").reduce((sum, o) => sum + Math.abs(Number(o.amount || 0)), 0)), icon: Check, color: "from-emerald-500 to-teal-600" },
         ].map((s, i) => (
           <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
             className="bg-white rounded-2xl shadow border border-gray-100 p-5">
@@ -212,21 +220,58 @@ export default function Admin({ panelRole } = {}) {
       {/* Orders Tab */}
       {tab === "orders" && (
         <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+          {/* Search bar */}
+          <div className="p-4 border-b border-gray-100">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input value={orderSearch} onChange={e => setOrderSearch(e.target.value)} placeholder="Search order # or customer..." className="pl-10" />
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="border-b border-gray-100">
-                {["Member", "Details", "Amount", "Status", "Date", "Actions"].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
+                {["Order #", "Customer", "Details", "Amount", "Status", "Date", "Actions"].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
               </tr></thead>
               <tbody>
-                {purchaseOrders.length === 0 ? <tr><td colSpan="6" className="text-center py-12 text-gray-400">No orders yet</td></tr> :
-                purchaseOrders.slice(0, 100).map(o => {
+                {purchaseOrders.length === 0 ? <tr><td colSpan="7" className="text-center py-12 text-gray-400">No orders yet</td></tr> :
+                purchaseOrders.filter(o => {
+                  if (!orderSearch) return true;
+                  const q = orderSearch.toLowerCase();
                   const member = members.find(m => m.id === o.member_id);
+                  const orderNum = formatOrderNumber(o, purchaseOrders.indexOf(o));
+                  return orderNum.toLowerCase().includes(q) || (member?.full_name || "").toLowerCase().includes(q) || (member?.username || "").toLowerCase().includes(q) || (o.description || "").toLowerCase().includes(q);
+                }).slice(0, 100).map((o, idx) => {
+                  const member = members.find(m => m.id === o.member_id);
+                  const orderNum = formatOrderNumber(o, purchaseOrders.indexOf(o));
                   return (
                     <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{member?.full_name || "—"} <span className="text-gray-400 text-xs">@{member?.username || ""}</span></td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{o.description || "—"}</td>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-900 whitespace-nowrap">#{orderNum}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <p className="font-medium text-gray-900">{member?.full_name || "Guest"}</p>
+                        {member?.phone && <p className="text-xs text-gray-400">{member.phone}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">{o.description || "—"}</td>
                       <td className="px-4 py-3 text-sm font-bold text-gray-900">{money(Math.abs(o.amount))}</td>
-                      <td className="px-4 py-3"><Badge className={o.status === "completed" ? "bg-green-100 text-green-700" : o.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>{o.status}</Badge></td>
+                      <td className="px-4 py-3">
+                        <div className="relative inline-flex items-center">
+                          <select
+                            value={o.status}
+                            onChange={async (e) => {
+                              try { await updateRecord("transactions", o.id, { status: e.target.value }); toast.success(`Order ${e.target.value}`); window.location.reload(); }
+                              catch { toast.error("Failed to update status"); }
+                            }}
+                            className={`appearance-none rounded-lg pl-3 pr-8 py-1.5 text-xs font-medium border cursor-pointer
+                              ${o.status === "completed" ? "bg-green-50 text-green-700 border-green-200" : o.status === "cancelled" ? "bg-red-50 text-red-700 border-red-200" : o.status === "shipped" ? "bg-blue-50 text-blue-700 border-blue-200" : o.status === "processing" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}
+                          >
+                            <option value="pending">pending</option>
+                            <option value="processing">processing</option>
+                            <option value="shipped">shipped</option>
+                            <option value="completed">delivered</option>
+                            <option value="cancelled">cancelled</option>
+                          </select>
+                          <svg className="absolute right-1.5 pointer-events-none w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">{formatDate(o.created_at || o.created_date, "MMM d, yyyy")}</td>
                       <td className="px-4 py-3">
                         {o.status === "pending" && (
@@ -493,6 +538,81 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
+      {/* JoyTel Screenshots Tab */}
+      {tab === "joytel_screenshots" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Camera className="w-5 h-5 text-blue-500" /> JoyTel Dealer Portal Screenshots
+            </h2>
+            <Button onClick={() => window.location.href = "/JoytelDealerLogin"} className="bg-blue-600 hover:bg-blue-700 text-white text-sm">
+              <Camera className="w-4 h-4" /> Take Screenshot
+            </Button>
+          </div>
+          {joytelScreenshots.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+              <Camera className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-400">No screenshots yet</p>
+              <p className="text-gray-400 text-sm mt-1">Go to JoyTel Login page and click "Screenshot" to capture the JoyTel portal.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {joytelScreenshots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(s => {
+                let imageData = null;
+                let capturedBy = "Unknown";
+                let title = "JoyTel Screenshot";
+                try {
+                  const parsed = JSON.parse(s.setting_value);
+                  imageData = parsed.image;
+                  capturedBy = parsed.captured_by || "Unknown";
+                  title = parsed.title || "JoyTel Screenshot";
+                } catch {}
+                return (
+                  <div key={s.id} className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden group">
+                    {imageData && (
+                      <div className="relative cursor-pointer" onClick={() => setLightboxImage({ src: imageData, title, capturedBy, date: s.created_at })}>
+                        <img src={imageData} alt={title} className="w-full h-48 object-cover group-hover:opacity-90 transition" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition bg-white/90 rounded-full p-2">
+                            <Maximize2 className="w-5 h-5 text-blue-600" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <p className="font-medium text-gray-900 text-sm truncate">{title}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-gray-400">by {capturedBy}</span>
+                        <span className="text-xs text-gray-400">{formatDate(s.created_at, "MMM d, yyyy h:mm a")}</span>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        {imageData && (
+                          <a href={imageData} download={`joytel_screenshot_${s.id}.jpg`}>
+                            <button className="p-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200" title="Download">
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </a>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (!confirm("Delete this screenshot?")) return;
+                            try { await deleteRecord("system_settings", s.id); toast.success("Screenshot deleted"); window.location.reload(); }
+                            catch { toast.error("Failed to delete"); }
+                          }}
+                          className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Settings Tab */}
       {tab === "settings" && (
         <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
@@ -505,6 +625,47 @@ export default function Admin({ panelRole } = {}) {
             <p><strong>Total Orders:</strong> {purchaseOrders.length}</p>
             <p><strong>Pending Top-ups:</strong> {pendingTopups.length}</p>
           </div>
+        </div>
+      )}
+
+      {/* Screenshot Lightbox Modal */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative max-w-5xl w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-white font-medium text-sm">{lightboxImage.title}</p>
+                <p className="text-white/60 text-xs">by {lightboxImage.capturedBy} · {formatDate(lightboxImage.date, "MMM d, yyyy h:mm a")}</p>
+              </div>
+              <div className="flex gap-2">
+                <a href={lightboxImage.src} download={`joytel_screenshot.jpg`}>
+                  <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white" title="Download">
+                    <Download className="w-5 h-5" />
+                  </button>
+                </a>
+                <button
+                  onClick={() => setLightboxImage(null)}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <img
+              src={lightboxImage.src}
+              alt={lightboxImage.title}
+              className="w-full max-h-[80vh] object-contain rounded-xl"
+            />
+          </motion.div>
         </div>
       )}
     </div>

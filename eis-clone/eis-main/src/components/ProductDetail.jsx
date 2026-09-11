@@ -1,38 +1,50 @@
 import React, { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star, Truck, Shield, RotateCcw, ArrowRight } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
-import { money, NETWORK_COLORS, FALLBACK_PRODUCTS } from "../lib/helpers";
+import { money, NETWORK_COLORS, FALLBACK_PRODUCTS, TRUST_BADGES,
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getStockCount } from "../lib/helpers";
 import { Button, Input } from "./ui";
+import ProductEditModal from "./ProductEditModal";
 
-export default function ProductDetail() {
-  const { id } = useParams();
+export default function ProductDetail({ productId }) {
+  const { id: paramId } = useParams();
+  const id = productId || paramId;
   const nav = useNavigate();
   const [qty, setQty] = useState(1);
   const [mobileNumber, setMobileNumber] = useState("");
   const [address, setAddress] = useState("");
   const [buying, setBuying] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: products = [] } = useTable("products");
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
+
+  const memberRole = currentMember?.role;
+  const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
 
   const walletBalance = currentMember
     ? transactions.filter(t => t.member_id === currentMember.id && t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0)
     : 0;
 
-  // Find product from DB or fallback
-  const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
-  const product = allProducts.find(p => p.id === id);
+  const product = products.find(p => String(p.id) === String(id)) || FALLBACK_PRODUCTS.find(p => String(p.id) === String(id));
 
   if (!product) {
+    if (productsLoading) {
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+          <div className="inline-block w-8 h-8 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
+        </div>
+      );
+    }
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <p className="text-gray-500 text-lg">Product not found.</p>
-        <Button onClick={() => nav("/Products")} className="mt-4 bg-orange-500 text-white">Back to Shop</Button>
+        <Button onClick={() => nav("/")} className="mt-4 bg-indigo-600 text-white">Back to Shop</Button>
       </div>
     );
   }
@@ -40,50 +52,67 @@ export default function ProductDetail() {
   const total = product.price * qty;
   const hasLoad = product.category === "load";
   const hasSim = product.category === "sim";
+  const isAvailable = product.is_active !== false;
+  const rating = getProductRating(product);
+  const reviewCount = getProductReviewCount(product);
+  const badge = getProductBadge(product);
+  const discount = getDiscountPercent(product);
+  const stockCount = getStockCount(product);
+  const gradient = NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600";
+
+  // Related products (same category or network, exclude current)
+  const relatedProducts = (products.length > 0 ? products : FALLBACK_PRODUCTS)
+    .filter(p => p.id !== product.id && (p.category === product.category || p.network === product.network))
+    .slice(0, 4);
 
   async function handleBuyNow() {
-    if (!currentMember) return;
+    if (!currentMember) { nav("/MemberLogin"); return; }
     if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     if (walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
-
     setBuying(true);
     try {
-      const details = hasLoad
-        ? `${product.name} x${qty} → ${mobileNumber}`
-        : `${product.name} x${qty} → ${address}`;
-      await createRecord("transactions", {
-        member_id: currentMember.id,
-        type: "purchase",
-        amount: -(product.price * qty),
-        description: details,
-        status: "pending",
-      });
+      const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
+      await createRecord("transactions", { member_id: currentMember.id, type: "purchase", amount: -(product.price * qty), description: details, status: "pending" });
       toast.success("Order placed successfully! Admin will process it shortly.");
       nav("/Orders");
-    } catch {
-      toast.error("Failed to place order");
-    }
+    } catch { toast.error("Failed to place order"); }
     setBuying(false);
   }
 
-  const gradient = NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600";
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-      <Link to="/Products" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 font-medium">
-        <ChevronLeft className="w-4 h-4" /> Back to Shop
-      </Link>
+      <div className="flex items-center justify-between mb-6">
+        <Link to="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium">
+          <ChevronLeft className="w-4 h-4" /> Back to Shop
+        </Link>
+        {canManage && (
+          <Button onClick={() => setEditProduct(product)} variant="outline" className="border-gray-200 text-sm">
+            <Pencil className="w-4 h-4" /> Edit Product
+          </Button>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Product Image */}
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative">
+          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden relative">
             {product.image_url ? (
               <img src={product.image_url} alt={product.name} className="w-full h-80 md:h-96 object-cover" />
             ) : (
               <div className={`h-80 md:h-96 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
                 {hasSim ? <Smartphone className="w-24 h-24 text-white/80" /> : <Zap className="w-24 h-24 text-white/80" />}
+              </div>
+            )}
+            {/* Badges */}
+            <div className="absolute top-3 left-3 flex flex-col gap-1">
+              {badge === "best_seller" && <span className="text-xs font-bold px-2.5 py-1 rounded bg-orange-500 text-white">BEST SELLER</span>}
+              {badge === "new" && <span className="text-xs font-bold px-2.5 py-1 rounded bg-teal-500 text-white">NEW</span>}
+              {discount > 0 && <span className="text-xs font-bold px-2.5 py-1 rounded bg-red-500 text-white">-{discount}%</span>}
+            </div>
+            {!isAvailable && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                <span className="text-white font-extrabold text-2xl bg-red-600 px-6 py-2 rounded-xl shadow-lg rotate-12">NOT AVAILABLE</span>
               </div>
             )}
           </div>
@@ -92,23 +121,33 @@ export default function ProductDetail() {
         {/* Product Info */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col">
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs font-semibold px-2.5 py-1 rounded-full capitalize">
+            <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full capitalize">
               <Store className="w-3 h-3" /> {product.category}
             </span>
-            {product.network && (
-              <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{product.network}</span>
-            )}
+            {product.network && <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{product.network}</span>}
+            {!isAvailable && <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Unavailable</span>}
           </div>
+
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{product.name}</h1>
-          <div className="flex items-baseline gap-3 mt-4">
-            <span className="text-3xl md:text-4xl font-extrabold text-orange-600">{money(product.price)}</span>
-            {product.load_amount && (
-              <span className="text-gray-400 text-lg line-through">₱{product.load_amount}</span>
-            )}
+
+          {/* Rating + stock */}
+          <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-1">
+              {[1,2,3,4,5].map(i => <Star key={i} className={`w-4 h-4 ${i <= Math.round(rating) ? "text-yellow-400 fill-yellow-400" : "text-gray-200"}`} />)}
+              <span className="text-sm font-medium text-gray-700 ml-1">{rating.toFixed(1)}</span>
+            </div>
+            <span className="text-sm text-gray-400">{reviewCount.toLocaleString()} Reviews</span>
+            {isAvailable && <span className="text-sm text-green-600 font-medium">In stock ({stockCount})</span>}
           </div>
-          {product.description && (
-            <p className="text-gray-600 mt-4 leading-relaxed">{product.description}</p>
-          )}
+
+          {/* Price */}
+          <div className="flex items-baseline gap-3 mt-4">
+            <span className="text-3xl md:text-4xl font-extrabold text-indigo-600">{money(product.price)}</span>
+            {product.load_amount && <span className="text-gray-400 text-lg line-through">₱{product.load_amount}</span>}
+            {discount > 0 && <span className="text-sm font-bold text-green-600">{discount}% OFF</span>}
+          </div>
+
+          {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{product.description}</p>}
 
           {/* Quantity */}
           <div className="mt-6">
@@ -123,39 +162,101 @@ export default function ProductDetail() {
           {/* Delivery details */}
           <div className="mt-6 space-y-4">
             {hasLoad && (
-              <div>
-                <label className="text-sm font-medium text-gray-700">Mobile Number (for load delivery)</label>
-                <Input value={mobileNumber} onChange={e => setMobileNumber(e.target.value)} placeholder="09XX XXX XXXX" className="mt-1" />
-              </div>
+              <div><label className="text-sm font-medium text-gray-700">Mobile Number (for load delivery)</label><Input value={mobileNumber} onChange={e => setMobileNumber(e.target.value)} placeholder="09XX XXX XXXX" className="mt-1" /></div>
             )}
             {hasSim && (
-              <div>
-                <label className="text-sm font-medium text-gray-700">Delivery Address</label>
-                <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="House #, Street, City" className="mt-1" />
-              </div>
+              <div><label className="text-sm font-medium text-gray-700">Delivery Address</label><Input value={address} onChange={e => setAddress(e.target.value)} placeholder="House #, Street, City" className="mt-1" /></div>
             )}
           </div>
 
-          {/* Wallet + Buy */}
+          {/* Buy section */}
           <div className="mt-8 p-4 bg-gray-50 rounded-2xl border border-gray-100">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-gray-500">Total</span>
               <span className="text-2xl font-extrabold text-gray-900">{money(total)}</span>
             </div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-gray-500">Wallet Balance</span>
-              <span className="font-bold text-emerald-600">{money(walletBalance)}</span>
-            </div>
-            {walletBalance < total && (
-              <p className="text-sm text-red-600 font-medium mb-3">⚠ Insufficient balance. <Link to="/Wallet" className="underline">Top up your wallet</Link> first.</p>
+            {currentMember && (
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-gray-500">Wallet Balance</span>
+                <span className="font-bold text-emerald-600">{money(walletBalance)}</span>
+              </div>
             )}
-            <Button onClick={handleBuyNow} disabled={buying || walletBalance < total}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white h-12 rounded-xl font-bold">
-              {buying ? "Placing order..." : <><Check className="w-5 h-5 mr-2" /> Buy Now</>}
-            </Button>
+            {!isAvailable ? (
+              <div className="w-full bg-red-100 text-red-700 h-12 rounded-xl font-bold flex items-center justify-center">This product is currently unavailable</div>
+            ) : !currentMember ? (
+              <Link to="/MemberLogin" className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold flex items-center justify-center gap-2">
+                <Check className="w-5 h-5" /> Login to Purchase
+              </Link>
+            ) : walletBalance < total ? (
+              <>
+                <p className="text-sm text-red-600 font-medium mb-3">⚠ Insufficient balance. <Link to="/Wallet" className="underline">Top up your wallet</Link> first.</p>
+                <Button disabled className="w-full bg-gray-300 text-gray-400 h-12 rounded-xl font-bold cursor-not-allowed">Buy Now</Button>
+              </>
+            ) : (
+              <Button onClick={handleBuyNow} disabled={buying} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold">
+                {buying ? "Placing order..." : <><Check className="w-5 h-5 mr-2" /> Buy Now</>}
+              </Button>
+            )}
+          </div>
+
+          {/* Trust badges */}
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            {TRUST_BADGES.map(badge => (
+              <div key={badge.title} className="flex flex-col items-center text-center p-3 bg-white rounded-xl border border-gray-100">
+                <span className="text-2xl mb-1">{badge.icon}</span>
+                <p className="text-xs font-medium text-gray-900">{badge.title}</p>
+                <p className="text-[10px] text-gray-400">{badge.desc}</p>
+              </div>
+            ))}
           </div>
         </motion.div>
       </div>
+
+      {/* Related Products */}
+      {relatedProducts.length > 0 && (
+        <section className="mt-12">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Related Products</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {relatedProducts.map(p => (
+              <Link key={p.id} to={`/Products/${p.id}`}>
+                <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden hover:shadow-lg hover:border-indigo-300 transition-all">
+                  <div className="h-28 overflow-hidden">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
+                        {p.category === "sim" ? <Smartphone className="w-8 h-8 text-white" /> : <Zap className="w-8 h-8 text-white" />}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
+                    <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(p.price)}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Edit modal */}
+      <AnimatePresence>
+        {editProduct && (
+          <ProductEditModal
+            product={editProduct}
+            onClose={() => setEditProduct(null)}
+            onSaved={(updatedProduct) => {
+              if (updatedProduct?.id && updatedProduct.id !== id) {
+                nav(`/Products/${updatedProduct.id}`, { replace: true });
+              } else if (updatedProduct?.id) {
+                updateLocalRecord(updatedProduct.id, updatedProduct);
+              }
+              setEditProduct(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

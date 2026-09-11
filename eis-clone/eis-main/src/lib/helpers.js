@@ -66,3 +66,66 @@ export const TRANSACTION_TYPES = {
 export function generateReferralCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
+
+// --- Zhoppy-style shop helpers ---
+
+// Deterministic pseudo-random based on string id (stable across renders)
+function hashId(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export function getProductRating(product) {
+  const h = hashId(String(product.id || product.name));
+  const ratings = [4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0];
+  return ratings[h % ratings.length];
+}
+
+export function getProductReviewCount(product) {
+  const h = hashId(String(product.id || product.name));
+  const counts = [190, 260, 320, 350, 410, 430, 580, 620, 740, 890, 1240, 1500];
+  return counts[h % counts.length];
+}
+
+export function getProductBadge(product) {
+  const h = hashId(String(product.id || product.name));
+  const badges = ["best_seller", "new", null, "best_seller", null, "new"];
+  return badges[h % badges.length];
+}
+
+export function getDiscountPercent(product) {
+  if (product.load_amount && product.price > product.load_amount) {
+    return Math.round((1 - product.load_amount / product.price) * 100);
+  }
+  if (product.original_price && product.price < product.original_price) {
+    return Math.round((1 - product.price / product.original_price) * 100);
+  }
+  const h = hashId(String(product.id || product.name));
+  const discounts = [0, 0, 15, 20, 25, 30, 40, 50];
+  return discounts[h % discounts.length];
+}
+
+export function getStockCount(product) {
+  const h = hashId(String(product.id || product.name));
+  return (h % 100) + 5;
+}
+
+export const SHOP_CATEGORIES = [
+  { id: "load", label: "E-Load", icon: "⚡" },
+  { id: "sim", label: "SIM Cards", icon: "📱" },
+  { id: "esim", label: "eSIM", icon: "📶" },
+];
+
+export const TRUST_BADGES = [
+  { icon: "🚚", title: "Free Shipping", desc: "Over ₱2,500" },
+  { icon: "🔒", title: "Secure Pay", desc: "GCash / COD" },
+  { icon: "↩️", title: "7-Day Returns", desc: "Easy returns" },
+];
+
+export function formatOrderNumber(order, index) {
+  if (order.order_number) return order.order_number;
+  const prefix = order.type === "purchase" ? "LUM" : "GST";
+  const num = String(100000 + (index + 1) * 137).padStart(6, "0");
+  return `${prefix}-${num.slice(-6)}`;
+}

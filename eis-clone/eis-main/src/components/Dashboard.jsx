@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Wallet, ArrowRight, ShoppingBag, Zap, Smartphone, TrendingUp, Crown, Shield, Store } from "lucide-react";
+import { Wallet, ArrowRight, ShoppingBag, Zap, Smartphone, TrendingUp, Crown, Shield, Store, Pencil, LayoutDashboard, User } from "lucide-react";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { supabase } from "../lib/supabase";
 import { money, formatDate, FALLBACK_PRODUCTS, NETWORK_COLORS } from "../lib/helpers";
@@ -109,6 +109,24 @@ export default function Dashboard() {
               </Link>
             ))}
           </div>
+        </motion.div>
+      )}
+
+      {/* Manage Shop quick access */}
+      {accessiblePanels.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <Link to={myRole === "reseller" ? "/ResellerPanel?tab=products" : myRole === "admin" ? "/AdminPanel?tab=products" : "/SuperAdminPanel?tab=products"}>
+            <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-5 text-white shadow-xl hover:shadow-2xl transition-all flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-xl">
+                <Pencil className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-lg font-bold">Manage Shop</p>
+                <p className="text-white/80 text-sm">Add, edit, or remove products in your online store</p>
+              </div>
+              <ArrowRight className="w-5 h-5 text-white" />
+            </div>
+          </Link>
         </motion.div>
       )}
 
