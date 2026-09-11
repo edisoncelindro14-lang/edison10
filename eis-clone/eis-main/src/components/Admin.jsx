@@ -80,16 +80,23 @@ export default function Admin({ panelRole } = {}) {
   async function approveTopup(id) {
     try {
       const req = topupReqs.find(r => r.id === id);
+      if (!req) { toast.error("Top-up request not found"); return; }
       await updateRecord("conversion_requests", id, { status: "approved" });
       const newTx = await createRecord("transactions", { member_id: req.member_id, type: "topup", amount: req.amount, description: "Wallet top-up approved", status: "completed" });
       updateLocalTopup(id, { status: "approved" });
       addLocalTx(newTx);
       toast.success("Top-up approved & wallet credited");
-    } catch { toast.error("Failed to approve top-up"); }
+    } catch (err) {
+      console.error("Approve top-up error:", err);
+      toast.error("Failed to approve top-up: " + (err?.message || "Unknown error"));
+    }
   }
   async function rejectTopup(id) {
     try { await updateRecord("conversion_requests", id, { status: "rejected" }); updateLocalTopup(id, { status: "rejected" }); toast.success("Top-up rejected"); }
-    catch { toast.error("Failed to reject"); }
+    catch (err) {
+      console.error("Reject top-up error:", err);
+      toast.error("Failed to reject: " + (err?.message || "Unknown error"));
+    }
   }
 
   async function approveMember(id) {
