@@ -118,7 +118,7 @@ export default function Wallet() {
           <div className="divide-y divide-gray-50">
             {myTopupReqs.map(r => {
               let note = {};
-              try { note = JSON.parse(r.admin_note); } catch {}
+              try { note = r.admin_note ? JSON.parse(r.admin_note) : {}; } catch {}
               return (
                 <div key={r.id} className="flex items-center justify-between px-6 py-4">
                   <div>
