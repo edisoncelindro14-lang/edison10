@@ -116,15 +116,21 @@ export default function Wallet() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mb-8">
           <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-900">Top-up Requests</h2></div>
           <div className="divide-y divide-gray-50">
-            {myTopupReqs.map(r => (
-              <div key={r.id} className="flex items-center justify-between px-6 py-4">
-                <div>
-                  <p className="font-medium text-gray-900">{money(r.amount)}</p>
-                  <p className="text-sm text-gray-500">{formatDate(r.created_at || r.created_date)}</p>
+            {myTopupReqs.map(r => {
+              let note = {};
+              try { note = JSON.parse(r.admin_note); } catch {}
+              return (
+                <div key={r.id} className="flex items-center justify-between px-6 py-4">
+                  <div>
+                    <p className="font-medium text-gray-900">{money(r.amount)}</p>
+                    {note.reference_number && <p className="text-xs text-gray-400 font-mono">Ref: {note.reference_number}</p>}
+                    {note.processed_by && <p className="text-xs text-gray-400">Processed by @{note.processed_by}</p>}
+                    <p className="text-sm text-gray-500">{formatDate(r.created_at || r.created_date)}</p>
+                  </div>
+                  <Badge className={r.status === "approved" ? "bg-green-100 text-green-700" : r.status === "rejected" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>{r.status}</Badge>
                 </div>
-                <Badge className={r.status === "approved" ? "bg-green-100 text-green-700" : r.status === "rejected" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>{r.status}</Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </motion.div>
       )}
@@ -139,10 +145,16 @@ export default function Wallet() {
             {myTx.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(tx => {
               const typeInfo = TRANSACTION_TYPES[tx.type] || { label: tx.type, color: "bg-gray-100 text-gray-700" };
               const isPurchase = tx.type === "withdrawal" || tx.type === "purchase";
+              const descParts = (tx.description || "").split(" | ");
+              const mainDesc = descParts[0] || "—";
+              const refPart = descParts.find(p => p.startsWith("Ref:"));
+              const byPart = descParts.find(p => p.startsWith("By:"));
               return (
                 <div key={tx.id} className="flex items-center justify-between px-6 py-4">
                   <div>
-                    <p className="font-medium text-gray-900">{tx.description || "—"}</p>
+                    <p className="font-medium text-gray-900">{mainDesc}</p>
+                    {refPart && <p className="text-xs text-gray-400 font-mono">{refPart}</p>}
+                    {byPart && <p className="text-xs text-gray-400">{byPart}</p>}
                     <p className="text-sm text-gray-500">{formatDate(tx.created_at || tx.created_date)}</p>
                   </div>
                   <div className="text-right">

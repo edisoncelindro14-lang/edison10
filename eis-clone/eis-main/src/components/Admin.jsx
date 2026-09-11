@@ -77,26 +77,45 @@ export default function Admin({ panelRole } = {}) {
     catch { toast.error("Failed to cancel"); }
   }
 
+  function generateRefNumber() {
+    const d = new Date();
+    const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `TU-${dateStr}-${rand}`;
+  }
+
   async function approveTopup(id) {
     try {
       const req = topupReqs.find(r => r.id === id);
       if (!req) { toast.error("Top-up request not found"); return; }
-      await updateRecord("conversion_requests", id, { status: "approved" });
-      const newTx = await createRecord("transactions", { member_id: req.member_id, type: "adjustment", amount: req.amount, description: "Wallet top-up approved", status: "completed" });
-      updateLocalTopup(id, { status: "approved" });
+      const refNum = generateRefNumber();
+      const processedBy = currentMember?.username || "unknown";
+      const adminNote = JSON.stringify({ reference_number: refNum, processed_by: processedBy, processed_at: new Date().toISOString() });
+      await updateRecord("conversion_requests", id, { status: "approved", admin_note: adminNote });
+      const newTx = await createRecord("transactions", { member_id: req.member_id, type: "adjustment", amount: req.amount, description: `Wallet top-up approved | Ref: ${refNum} | By: @${processedBy}`, status: "completed" });
+      updateLocalTopup(id, { status: "approved", admin_note: adminNote });
       addLocalTx(newTx);
-      toast.success("Top-up approved & wallet credited");
+      toast.success(`Top-up approved & wallet credited | Ref: ${refNum}`);
     } catch (err) {
       console.error("Approve top-up error:", err);
       toast.error("Failed to approve top-up: " + (err?.message || "Unknown error"));
     }
   }
   async function rejectTopup(id) {
-    try { await updateRecord("conversion_requests", id, { status: "rejected" }); updateLocalTopup(id, { status: "rejected" }); toast.success("Top-up rejected"); }
-    catch (err) {
+    try {
+      const processedBy = currentMember?.username || "unknown";
+      const adminNote = JSON.stringify({ processed_by: processedBy, processed_at: new Date().toISOString() });
+      await updateRecord("conversion_requests", id, { status: "rejected", admin_note: adminNote });
+      updateLocalTopup(id, { status: "rejected", admin_note: adminNote });
+      toast.success("Top-up rejected");
+    } catch (err) {
       console.error("Reject top-up error:", err);
       toast.error("Failed to reject: " + (err?.message || "Unknown error"));
     }
+  }
+
+  function parseAdminNote(note) {
+    try { return JSON.parse(note); } catch { return {}; }
   }
 
   async function approveMember(id) {
@@ -304,17 +323,20 @@ export default function Admin({ panelRole } = {}) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="border-b border-gray-100">
-                {["Member", "Amount", "Status", "Date", "Actions"].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
+                {["Member", "Amount", "Ref #", "Status", "Processed By", "Date", "Actions"].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
               </tr></thead>
               <tbody>
-                {topupReqs.length === 0 ? <tr><td colSpan="5" className="text-center py-12 text-gray-400">No top-up requests</td></tr> :
+                {topupReqs.length === 0 ? <tr><td colSpan="7" className="text-center py-12 text-gray-400">No top-up requests</td></tr> :
                 topupReqs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(r => {
                   const member = members.find(m => m.id === r.member_id);
+                  const note = parseAdminNote(r.admin_note);
                   return (
                     <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{member?.full_name || "—"} <span className="text-gray-400 text-xs">@{member?.username || ""}</span></td>
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">{money(r.amount)}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600 font-mono">{note.reference_number || "—"}</td>
                       <td className="px-6 py-4"><Badge className={r.status === "approved" ? "bg-green-100 text-green-700" : r.status === "rejected" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>{r.status}</Badge></td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{note.processed_by ? `@${note.processed_by}` : "—"}</td>
                       <td className="px-6 py-4 text-sm text-gray-400">{formatDate(r.created_at || r.created_date, "MMM d, yyyy")}</td>
                       <td className="px-6 py-4">
                         {r.status === "pending" && (
