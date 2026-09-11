@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: joytel-proxy
+    runtime: docker
+    dockerfilePath: ./Dockerfile.proxy
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PROXY_PORT
+        value: 8000
+      - key: PROXY_TOKEN
+        sync: false
+    autoDeploy: true
