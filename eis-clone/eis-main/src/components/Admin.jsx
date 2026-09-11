@@ -115,7 +115,7 @@ export default function Admin({ panelRole } = {}) {
   }
 
   function parseAdminNote(note) {
-    try { return JSON.parse(note); } catch { return {}; }
+    try { return note ? JSON.parse(note) : {}; } catch { return {}; }
   }
 
   async function approveMember(id) {
