@@ -45,7 +45,7 @@ export function useTable(tableName, options = {}) {
   useEffect(() => {
     if (!enabled) return;
     const channel = supabase
-      .channel(`realtime_${tableName}`)
+      .channel(`realtime_${tableName}_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => fetchData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
