@@ -340,9 +340,9 @@ export default function Admin({ panelRole } = {}) {
                       <td className="px-6 py-4 text-sm text-gray-400">{formatDate(r.created_at || r.created_date, "MMM d, yyyy")}</td>
                       <td className="px-6 py-4">
                         {r.status === "pending" && (
-                          <div className="flex gap-2">
-                            <button onClick={() => approveTopup(r.id)} className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200" title="Approve"><Check className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => rejectTopup(r.id)} className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Reject"><X className="w-3.5 h-3.5" /></button>
+                          <div className="flex gap-3">
+                            <button onClick={() => approveTopup(r.id)} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium text-xs flex items-center gap-1" title="Approve"><Check className="w-4 h-4" /> Approve</button>
+                            <button onClick={() => rejectTopup(r.id)} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium text-xs flex items-center gap-1" title="Reject"><X className="w-4 h-4" /> Reject</button>
                           </div>
                         )}
                       </td>
