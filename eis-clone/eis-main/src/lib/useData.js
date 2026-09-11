@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+// useCallback is used below for memoizing updateLocalRecord/addLocalRecord
 import { supabase } from "./supabase";
 import { getSessionMemberId } from "./auth";
 
@@ -10,7 +11,7 @@ export function useTable(tableName, options = {}) {
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
-    setIsLoading(true);
+    setIsLoading(prev => prev || data.length === 0);
     try {
       let query = supabase.from(tableName).select("*");
       if (filter) {
@@ -39,7 +40,26 @@ export function useTable(tableName, options = {}) {
   }, [tableName, JSON.stringify(filter), order, limit, enabled]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  return { data, isLoading, refetch: fetchData };
+
+  // Real-time subscription: refetch when table changes so wallet/orders update instantly
+  useEffect(() => {
+    if (!enabled) return;
+    const channel = supabase
+      .channel(`realtime_${tableName}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => fetchData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tableName, enabled, fetchData]);
+
+  const updateLocalRecord = useCallback((id, updates) => {
+    setData(prev => prev.map(r => String(r.id) === String(id) ? { ...r, ...updates } : r));
+  }, []);
+
+  const addLocalRecord = useCallback((record) => {
+    setData(prev => [...prev, record]);
+  }, []);
+
+  return { data, isLoading, refetch: fetchData, updateLocalRecord, addLocalRecord };
 }
 
 // Hook to get the current logged-in member

@@ -32,8 +32,8 @@ export default function Admin({ panelRole } = {}) {
   const isAdminRole = currentUserRole === "admin";
   const isReseller = currentUserRole === "reseller";
   const canManageProducts = ["super_admin", "admin", "reseller"].includes(currentUserRole);
-  const { data: transactions = [] } = useTable("transactions");
-  const { data: topupReqs = [] } = useTable("conversion_requests");
+  const { data: transactions = [], addLocalRecord: addLocalTx, updateLocalRecord: updateLocalTx } = useTable("transactions");
+  const { data: topupReqs = [], updateLocalRecord: updateLocalTopup } = useTable("conversion_requests");
   const { data: products = [] } = useTable("products");
   const { data: gcashInfo = [] } = useTable("gcash_info");
   const { data: allSettings = [] } = useTable("system_settings");
@@ -69,11 +69,11 @@ export default function Admin({ panelRole } = {}) {
   ];
 
   async function approveOrder(id) {
-    try { await updateRecord("transactions", id, { status: "completed" }); toast.success("Order approved"); window.location.reload(); }
+    try { await updateRecord("transactions", id, { status: "completed" }); updateLocalTx(id, { status: "completed" }); toast.success("Order approved"); }
     catch { toast.error("Failed to approve"); }
   }
   async function rejectOrder(id) {
-    try { await updateRecord("transactions", id, { status: "cancelled" }); toast.success("Order cancelled"); window.location.reload(); }
+    try { await updateRecord("transactions", id, { status: "cancelled" }); updateLocalTx(id, { status: "cancelled" }); toast.success("Order cancelled"); }
     catch { toast.error("Failed to cancel"); }
   }
 
@@ -81,13 +81,14 @@ export default function Admin({ panelRole } = {}) {
     try {
       const req = topupReqs.find(r => r.id === id);
       await updateRecord("conversion_requests", id, { status: "approved" });
-      await createRecord("transactions", { member_id: req.member_id, type: "topup", amount: req.amount, description: "Wallet top-up approved", status: "completed" });
+      const newTx = await createRecord("transactions", { member_id: req.member_id, type: "topup", amount: req.amount, description: "Wallet top-up approved", status: "completed" });
+      updateLocalTopup(id, { status: "approved" });
+      addLocalTx(newTx);
       toast.success("Top-up approved & wallet credited");
-      window.location.reload();
     } catch { toast.error("Failed to approve top-up"); }
   }
   async function rejectTopup(id) {
-    try { await updateRecord("conversion_requests", id, { status: "rejected" }); toast.success("Top-up rejected"); window.location.reload(); }
+    try { await updateRecord("conversion_requests", id, { status: "rejected" }); updateLocalTopup(id, { status: "rejected" }); toast.success("Top-up rejected"); }
     catch { toast.error("Failed to reject"); }
   }
 
@@ -257,7 +258,7 @@ export default function Admin({ panelRole } = {}) {
                           <select
                             value={o.status}
                             onChange={async (e) => {
-                              try { await updateRecord("transactions", o.id, { status: e.target.value }); toast.success(`Order ${e.target.value}`); window.location.reload(); }
+                              try { await updateRecord("transactions", o.id, { status: e.target.value }); updateLocalTx(o.id, { status: e.target.value }); toast.success(`Order ${e.target.value}`); }
                               catch { toast.error("Failed to update status"); }
                             }}
                             className={`appearance-none rounded-lg pl-3 pr-8 py-1.5 text-xs font-medium border cursor-pointer
