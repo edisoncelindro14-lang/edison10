@@ -40,3 +40,5 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('Create-link error:', err);
     return res.status(500).json({ error: 'Failed to create payment link', details: err.message });
+  }
+}
