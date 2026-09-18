@@ -40,7 +40,7 @@ export default function Wallet() {
 
   async function handleTopup() {
     const amount = parseFloat(topupAmount);
-    if (!amount || amount < 10) { toast.error("Enter at least ₱10"); return; }
+    if (!amount || amount < 1) { toast.error("Enter at least ₱1"); return; }
     setSubmitting(true);
     try {
       const res = await fetch("/api/paymongo/create-link", {

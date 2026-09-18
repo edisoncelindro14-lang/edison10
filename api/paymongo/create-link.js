@@ -26,8 +26,8 @@ export default async function handler(req, res) {
 
   const { amount, member_id } = req.body || {};
   const parsedAmount = parseFloat(amount);
-  if (!parsedAmount || parsedAmount < 10) {
-    return res.status(400).json({ error: "Amount must be at least ₱10" });
+  if (!parsedAmount || parsedAmount < 1) {
+    return res.status(400).json({ error: "Amount must be at least ₱1" });
   }
   if (!member_id) {
     return res.status(400).json({ error: "member_id is required" });
