@@ -31,6 +31,12 @@ export default async function handler(req, res) {
 
   const rawBody = JSON.stringify(req.body || {});
   const sigHeader = req.headers["paymongo-signature"] || "";
+  const parts = Object.fromEntries((sigHeader || "").split(",").map(p => p.split("=")));
+  const signedPayload = `${parts.t}.${rawBody}`;
+  const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(signedPayload).digest("hex");
+  console.log("DEBUG sigHeader:", sigHeader);
+  console.log("DEBUG rawBody:", rawBody);
+  console.log("DEBUG expected:", expected);
   if (!verifySignature(rawBody, sigHeader, WEBHOOK_SECRET)) {
     return res.status(401).json({ error: "Invalid signature" });
   }
