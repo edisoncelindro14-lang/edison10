@@ -73,7 +73,7 @@ export default async function handler(req, res) {
         await supabase.from("transactions").insert({
           member_id: memberId,
           amount: amountPaid,
-          type: "topup",
+          type: "adjustment",
           status: "completed",
           description: `PayMongo top-up | Ref: ${referenceNumber || "N/A"} | Auto-credited`,
         });
