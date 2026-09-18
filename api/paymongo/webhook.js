@@ -47,6 +47,16 @@ export default async function handler(req, res) {
   const sigHeader = req.headers["paymongo-signature"] || "";
 
   {
+    const KNOWN_CORRECT_SECRET = "whsk_WQsW5QXFjk9eXGEjnxBgRGUV";
+    console.log(
+      "DEBUG secret check: length=", WEBHOOK_SECRET.length,
+      "masked=", WEBHOOK_SECRET.slice(0, 6) + "..." + WEBHOOK_SECRET.slice(-4),
+      "matchesKnownCorrect=", WEBHOOK_SECRET === KNOWN_CORRECT_SECRET,
+      "matchesTrimmed=", WEBHOOK_SECRET.trim() === KNOWN_CORRECT_SECRET
+    );
+  }
+
+  {
     const parts = Object.fromEntries((sigHeader || "").split(",").map(p => p.split("=")));
     const target = parts.li || parts.te;
     const candidates = {
