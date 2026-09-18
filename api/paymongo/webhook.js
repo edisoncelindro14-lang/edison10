@@ -4,12 +4,26 @@ import { createClient } from "@supabase/supabase-js";
 // PayMongo calls this endpoint when a payment link is paid.
 // Register it in the PayMongo dashboard as:
 //   https://<your-domain>/api/paymongo/webhook  (event: link.payment.paid)
+//
+// We read the raw request stream directly (rather than the req.body
+// getter) because signature verification needs the exact raw bytes
+// PayMongo signed — a JSON.parse/stringify round-trip of the body is
+// not guaranteed to reproduce those bytes.
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET;
+
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", chunk => { data += chunk; });
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
 
 function verifySignature(rawBody, signatureHeader, secret) {
   const parts = Object.fromEntries((signatureHeader || "").split(",").map(p => p.split("=")));
@@ -29,19 +43,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "PAYMONGO_WEBHOOK_SECRET not configured" });
   }
 
-  const rawBody = JSON.stringify(req.body || {});
+  const rawBody = await getRawBody(req);
   const sigHeader = req.headers["paymongo-signature"] || "";
-  const parts = Object.fromEntries((sigHeader || "").split(",").map(p => p.split("=")));
-  const signedPayload = `${parts.t}.${rawBody}`;
-  const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(signedPayload).digest("hex");
-  console.log("DEBUG sigHeader:", sigHeader);
-  console.log("DEBUG rawBody:", rawBody);
-  console.log("DEBUG expected:", expected);
   if (!verifySignature(rawBody, sigHeader, WEBHOOK_SECRET)) {
+    console.error("PayMongo webhook: invalid signature");
     return res.status(401).json({ error: "Invalid signature" });
   }
 
-  const event = req.body;
+  const event = JSON.parse(rawBody);
   const eventType = event?.data?.attributes?.type;
   const eventData = event?.data?.attributes?.data;
   console.log(`PayMongo webhook: ${eventType}`);
@@ -57,6 +66,9 @@ export default async function handler(req, res) {
 
     if (memberId && amountPaid > 0) {
       try {
+        // Only credit if a matching pending request is still pending — this
+        // keeps retried/duplicate webhook deliveries for the same payment
+        // from crediting the wallet more than once.
         const { data: pending } = await supabase
           .from("conversion_requests")
           .select("*")
@@ -74,17 +86,19 @@ export default async function handler(req, res) {
               admin_note: JSON.stringify({ ...existing, reference_number: referenceNumber, paid_at: new Date().toISOString(), auto_approved: true }),
             })
             .eq("id", pending[0].id);
+
+          await supabase.from("transactions").insert({
+            member_id: memberId,
+            amount: amountPaid,
+            type: "adjustment",
+            status: "completed",
+            description: `PayMongo top-up | Ref: ${referenceNumber || "N/A"} | Auto-credited`,
+          });
+
+          console.log(`Wallet credited: ₱${amountPaid} for member ${memberId}`);
+        } else {
+          console.log(`No matching pending request for link ${linkId} — skipping (already processed or not found)`);
         }
-
-        await supabase.from("transactions").insert({
-          member_id: memberId,
-          amount: amountPaid,
-          type: "adjustment",
-          status: "completed",
-          description: `PayMongo top-up | Ref: ${referenceNumber || "N/A"} | Auto-credited`,
-        });
-
-        console.log(`Wallet credited: ₱${amountPaid} for member ${memberId}`);
       } catch (err) {
         console.error("Wallet credit error:", err.message);
       }
