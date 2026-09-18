@@ -8,7 +8,7 @@ import { saveMemberSession } from "../lib/auth";
 import { Button, Input, Label } from "./ui";
 
 const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
-
+// Login component for member authentication -test 
 export default function Login() {
   const nav = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
