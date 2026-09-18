@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Wallet as WalletIcon, ArrowRight, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, useCurrentMember, createRecord } from "../lib/useData";
+import { useTable, useCurrentMember } from "../lib/useData";
 import { money, formatDate, TRANSACTION_TYPES } from "../lib/helpers";
 import { Button, Input, Badge } from "./ui";
 
@@ -43,17 +43,18 @@ export default function Wallet() {
     if (!amount || amount < 10) { toast.error("Enter at least ₱10"); return; }
     setSubmitting(true);
     try {
-      await createRecord("conversion_requests", {
-        member_id: currentMember.id,
-        amount,
-        status: "pending",
+      const res = await fetch("/api/paymongo/create-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, member_id: currentMember.id }),
       });
-      toast.success("Top-up request submitted! Send GCash payment and upload receipt.");
-      setTopupAmount("");
-    } catch {
-      toast.error("Failed to submit top-up request");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create payment link");
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      toast.error(err.message || "Failed to start PayMongo payment");
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   return (
@@ -108,7 +109,7 @@ export default function Wallet() {
             {submitting ? "Submitting..." : "Request Top-up"}
           </Button>
         </div>
-        <p className="text-sm text-gray-500 mt-3">After requesting, use the GCash Payment button (bottom right) to send payment and upload your receipt. Admin will approve your top-up.</p>
+        <p className="text-sm text-gray-500 mt-3">You'll be redirected to PayMongo to complete payment via GCash, Maya, or card. Your wallet is credited automatically once payment is confirmed.</p>
       </motion.div>
 
       {/* Top-up history */}
