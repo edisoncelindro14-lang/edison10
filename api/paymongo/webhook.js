@@ -45,6 +45,27 @@ export default async function handler(req, res) {
 
   const rawBody = await getRawBody(req);
   const sigHeader = req.headers["paymongo-signature"] || "";
+
+  {
+    const parts = Object.fromEntries((sigHeader || "").split(",").map(p => p.split("=")));
+    const target = parts.li || parts.te;
+    const candidates = {
+      "t.rawBody": `${parts.t}.${rawBody}`,
+      "rawBody only": rawBody,
+      "t+rawBody (no dot)": `${parts.t}${rawBody}`,
+      "rawBody.t": `${rawBody}.${parts.t}`,
+    };
+    console.log("DEBUG target(li):", target);
+    console.log("DEBUG rawBody length:", rawBody.length, "first 80:", rawBody.slice(0, 80));
+    console.log("DEBUG rawBody last 80:", rawBody.slice(-80));
+    for (const [name, payload] of Object.entries(candidates)) {
+      const digestHex = crypto.createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("hex");
+      const digestB64 = crypto.createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("base64");
+      console.log(`DEBUG [${name}] hex=${digestHex} MATCH_HEX=${digestHex === target}`);
+      console.log(`DEBUG [${name}] b64=${digestB64} MATCH_B64=${digestB64 === target}`);
+    }
+  }
+
   if (!verifySignature(rawBody, sigHeader, WEBHOOK_SECRET)) {
     console.error("PayMongo webhook: invalid signature");
     return res.status(401).json({ error: "Invalid signature" });
