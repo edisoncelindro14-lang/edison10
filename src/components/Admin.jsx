@@ -26,7 +26,7 @@ export default function Admin({ panelRole } = {}) {
   const [staffTopupMember, setStaffTopupMember] = useState(null);
   const [staffTopupAmount, setStaffTopupAmount] = useState("");
 
-  const { data: members = [] } = useTable("members");
+  const { data: members = [], refetch: refetchMembers, updateLocalRecord: updateLocalMember } = useTable("members");
   const memberId = getSessionMemberId();
   const currentMember = memberId ? members.find(m => m.id === memberId) : null;
   const currentUserRole = panelRole || currentMember?.role;
@@ -170,8 +170,14 @@ export default function Admin({ panelRole } = {}) {
 
   async function changeRole(id, role) {
     const labels = { super_admin: "SuperAdmin", admin: "Admin", reseller: "Reseller", member: "User", staff: "Staff" };
-    try { await updateRecord("members", id, { role }); toast.success(`Role set to ${labels[role]}`); window.location.reload(); }
-    catch { toast.error("Failed to update role"); }
+    try {
+      await updateRecord("members", id, { role });
+      updateLocalMember(id, { role });
+      toast.success(`Role set to ${labels[role]}`);
+    } catch (err) {
+      console.error("Role update failed:", err);
+      toast.error("Failed to update role: " + (err?.message || "Unknown error"));
+    }
   }
 
   async function uploadProductImage(file) {
