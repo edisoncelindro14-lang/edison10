@@ -123,16 +123,47 @@ export default function Admin({ panelRole } = {}) {
   async function approveStaffTopup() {
     const amount = parseFloat(staffTopupAmount);
     if (!amount || amount < 1) { toast.error("Enter at least ₱1"); return; }
+
+    const gcashNum = staffTopupMember?.gcash_number;
+    const gcashName = staffTopupMember?.gcash_name || staffTopupMember?.full_name;
+    if (!gcashNum) {
+      toast.error("Staff member has no GCash number. Ask them to set it in their Profile.");
+      return;
+    }
+
+    const btn = document.getElementById("approve-staff-topup");
+    if (btn) { btn.disabled = true; btn.textContent = "Sending to PayMongo..."; }
+
     try {
-      const refNum = generateRefNumber();
+      const payoutRes = await fetch("/api/paymongo/payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          gcash_number: gcashNum,
+          gcash_name: gcashName,
+          member_id: staffTopupMember.id,
+        }),
+      });
+      const payoutData = await payoutRes.json();
+      if (!payoutRes.ok) throw new Error(payoutData.error || "PayMongo payout failed");
+
+      const refNum = payoutData.reference_number || generateRefNumber();
       const processedBy = currentMember?.username || "unknown";
-      const newTx = await createRecord("transactions", { member_id: staffTopupMember.id, type: "adjustment", amount, description: `Staff account top-up approved | Ref: ${refNum} | By: @${processedBy}`, status: "completed" });
+      const newTx = await createRecord("transactions", {
+        member_id: staffTopupMember.id,
+        type: "adjustment",
+        amount,
+        description: `Staff account top-up approved | PayMongo Ref: ${refNum} | By: @${processedBy}`,
+        status: "completed",
+      });
       addLocalTx(newTx);
-      toast.success(`Staff account topped up with ${money(amount)} | Ref: ${refNum}`);
+      toast.success(`Staff account topped up with ${money(amount)} | PayMongo Ref: ${refNum}`);
       setStaffTopupMember(null);
       setStaffTopupAmount("");
     } catch (err) {
       toast.error("Failed to top up staff account: " + (err?.message || "Unknown error"));
+      if (btn) { btn.disabled = false; btn.textContent = "Approve & Credit Wallet"; }
     }
   }
 
@@ -597,7 +628,7 @@ export default function Admin({ panelRole } = {}) {
                 <Input type="number" value={staffTopupAmount} onChange={e => setStaffTopupAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
               </div>
               <div className="flex gap-3">
-                <Button onClick={approveStaffTopup} className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                <Button id="approve-staff-topup" onClick={approveStaffTopup} className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
                   <Check className="w-4 h-4 mr-2" /> Approve & Credit Wallet
                 </Button>
                 <Button onClick={() => setStaffTopupMember(null)} variant="outline" className="border-gray-200">Cancel</Button>
