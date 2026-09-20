@@ -5,7 +5,8 @@ import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice } from "../lib/helpers";
+import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -38,6 +39,7 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
   const reviewCount = getProductReviewCount(product);
   const badge = getProductBadge(product);
   const discount = getDiscountPercent(product);
+  const finalPrice = getFinalPrice(product);
 
   return (
     <motion.div
@@ -89,13 +91,15 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
         <div className="mt-1"><StarRating rating={rating} count={reviewCount} /></div>
         <div className="flex items-center justify-between mt-2">
           <div>
-            <p className="text-lg font-extrabold text-orange-600">{money(product.price)}</p>
-            {product.load_amount && <span className="text-xs text-gray-400 line-through">₱{product.load_amount}</span>}
+            <p className="text-lg font-extrabold text-orange-600">{money(finalPrice)}</p>
+            {product.discount_percent > 0 ? (
+              <span className="text-xs text-gray-400 line-through">{money(product.price)}</span>
+            ) : product.load_amount && <span className="text-xs text-gray-400 line-through">₱{product.load_amount}</span>}
           </div>
           <Button size="sm" disabled={!isAvailable}
             onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
-            className={isAvailable ? "bg-orange-500 hover:bg-orange-600 text-white h-8 w-8 p-0" : "bg-gray-300 text-gray-400 cursor-not-allowed h-8 w-8 p-0"}>
-            <ShoppingCart className="w-3.5 h-3.5" />
+            className={isAvailable ? "bg-orange-500 hover:bg-orange-600 text-white h-10 w-10 p-0" : "bg-gray-300 text-gray-400 cursor-not-allowed h-10 w-10 p-0"}>
+            <ShoppingCart className="w-5 h-5" />
           </Button>
         </div>
       </div>
@@ -107,10 +111,12 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const nav = useNavigate();
   const [search, setSearch] = useState(headerSearch);
   const [filterCategory, setFilterCategory] = useState("all");
-  const [cart, setCart] = useState([]);
+  const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileNumber, setMobileNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [addressEdited, setAddressEdited] = useState(false);
+  const [mobileEdited, setMobileEdited] = useState(false);
   const [buying, setBuying] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [draggedId, setDraggedId] = useState(null);
@@ -125,10 +131,16 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
+  // Prefill delivery details from the member's profile, unless they've edited them for this order
+  useEffect(() => {
+    if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
+    if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+  }, [currentMember?.id]);
+
   const memberRole = currentMember?.role;
   const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
 
-  const allProducts = products.length > 0 ? products : (productsLoading ? FALLBACK_PRODUCTS : []);
+  const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
   const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
 
@@ -153,15 +165,9 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   function addToCart(product) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === product.id);
-      if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...product, qty: 1 }];
-    });
+    cartAddToCart(product);
     toast.success(`${product.name} added to cart`);
   }
-  function removeFromCart(id) { setCart(prev => prev.filter(i => i.id !== id)); }
-  function updateQty(id, delta) { setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)); }
 
   function handleEditSaved(updatedProduct) {
     const scrollY = window.scrollY;
@@ -189,24 +195,46 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setDraggedId(null); setDragOverId(null); setSortVersion(v => v + 1);
   }
 
-  async function handleCheckout() {
+  async function handleCheckout(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
     if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
-    if (walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
+    const isWallet = paymentMethod === "wallet";
+    if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
     try {
+      const txIds = [];
       for (const item of cart) {
         const details = item.category === "load"
           ? `${item.name} x${item.qty} → ${mobileNumber}`
           : `${item.name} x${item.qty} → ${address}`;
-        await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -(item.price * item.qty), description: details, status: "pending" });
+        const tx = await createRecord("transactions", {
+          member_id: currentMember.id,
+          type: isWallet ? "withdrawal" : "purchase",
+          amount: -(item.price * item.qty),
+          description: isWallet ? details : `${details} | Pay to Kabaro`,
+          status: "pending",
+        });
+        txIds.push(tx.id);
       }
-      toast.success("Order placed successfully! Admin will process it shortly.");
-      setCart([]); setMobileNumber(""); setAddress(""); setCheckoutOpen(false);
-    } catch { toast.error("Failed to place order"); }
+
+      if (isWallet) {
+        toast.success("Order placed successfully! Admin will process it shortly.");
+        clearCart(); setCheckoutOpen(false);
+      } else {
+        const res = await fetch("/api/paymongo/create-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: cartTotal, member_id: currentMember.id, purpose: "purchase", tx_ids: txIds }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create payment link");
+        clearCart();
+        window.location.href = data.checkout_url;
+      }
+    } catch (err) { toast.error(err?.message || "Failed to place order"); }
     setBuying(false);
   }
 
@@ -384,18 +412,47 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
                     ))}
                   </div>
                   {cart.some(i => i.category === "load") && (
-                    <div className="mb-4"><label className="text-sm font-medium text-gray-700">Mobile Number (for load)</label><Input value={mobileNumber} onChange={e => setMobileNumber(e.target.value)} placeholder="09XX XXX XXXX" className="mt-1" /></div>
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Mobile Number (for load)</label>
+                        <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
+                      </div>
+                      <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
+                    </div>
                   )}
                   {cart.some(i => i.category === "sim") && (
-                    <div className="mb-4"><label className="text-sm font-medium text-gray-700">Delivery Address (for SIM)</label><Input value={address} onChange={e => setAddress(e.target.value)} placeholder="House #, Street, City" className="mt-1" /></div>
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Delivery Address (for SIM)</label>
+                        <button type="button" onClick={() => { setAddressEdited(true); setAddress(""); }} className="text-xs text-indigo-600 hover:underline">Use a different address</button>
+                      </div>
+                      <Input value={address} onChange={e => { setAddressEdited(true); setAddress(e.target.value); }} placeholder="House #, Street, City" className="mt-1" />
+                    </div>
                   )}
-                  <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
+                  {currentMember && (
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-500">Wallet Balance</span>
+                      <span className="font-bold text-emerald-600">{money(walletBalance)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-gray-100 pt-4 flex items-center justify-between mb-4">
                     <span className="font-bold text-gray-900">Total: {money(cartTotal)}</span>
                     {currentMember && walletBalance < cartTotal && <span className="text-sm text-red-600">Insufficient balance</span>}
                   </div>
-                  <Button onClick={handleCheckout} disabled={buying || (currentMember ? walletBalance < cartTotal : false)} className="w-full mt-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold">
-                    {buying ? "Placing order..." : <><Check className="w-5 h-5 mr-2" /> {currentMember ? "Place Order" : "Login to Checkout"}</>}
-                  </Button>
+                  {!currentMember ? (
+                    <Button onClick={() => handleCheckout()} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold">
+                      <Check className="w-5 h-5 mr-2" /> Login to Checkout
+                    </Button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button onClick={() => handleCheckout("kabaro")} disabled={buying} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white h-12 rounded-xl font-bold">
+                        {buying ? "Placing..." : <><ShoppingCart className="w-5 h-5 mr-2" /> Pay via PayMongo</>}
+                      </Button>
+                      <Button onClick={() => handleCheckout("wallet")} disabled={buying || walletBalance < cartTotal} className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white h-12 rounded-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                        {buying ? "Placing..." : <><Check className="w-5 h-5 mr-2" /> Pay from Wallet</>}
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

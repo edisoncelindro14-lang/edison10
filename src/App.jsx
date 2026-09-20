@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { getSessionMemberId } from "./lib/auth";
 import { useTable } from "./lib/useData";
+import { CartProvider } from "./lib/CartContext";
 import Layout from "./components/Layout";
 import Landing from "./components/Landing";
 import PublicShop from "./components/PublicShop";
@@ -81,11 +82,11 @@ function PageRouter() {
 
 export default function App() {
   return (
-    <>
+    <CartProvider>
       <Toaster position="top-right" />
       <Routes>
         <Route path="/*" element={<PageRouter />} />
       </Routes>
-    </>
+    </CartProvider>
   );
 }

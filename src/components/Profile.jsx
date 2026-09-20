@@ -42,17 +42,6 @@ export default function Profile() {
 
   function update(key) { return e => setForm(f => ({ ...f, [key]: e.target.value })); }
 
-  async function save() {
-    setSaving(true);
-    try {
-      await updateRecord("members", currentMember.id, form);
-      toast.success("Profile updated successfully!");
-    } catch {
-      toast.error("Failed to update profile");
-    }
-    setSaving(false);
-  }
-
   const fields = [
     { key: "full_name", label: "Full Name" },
     { key: "email", label: "Email", type: "email" },
@@ -64,6 +53,23 @@ export default function Profile() {
     { key: "gcash_number", label: "GCash Number", placeholder: "09XX XXX XXXX" },
     { key: "gcash_name", label: "GCash Account Name", placeholder: "Registered name" },
   ];
+
+  async function save() {
+    const allFields = [...fields, ...gcashFields];
+    const missing = allFields.filter(f => !String(form[f.key] || "").trim());
+    if (missing.length > 0) {
+      toast.error(`Please fill out: ${missing.map(f => f.label).join(", ")}`);
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateRecord("members", currentMember.id, form);
+      toast.success("Profile updated successfully!");
+    } catch {
+      toast.error("Failed to update profile");
+    }
+    setSaving(false);
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
@@ -93,7 +99,7 @@ export default function Profile() {
         </div>
         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
           <div><p className="text-xs text-gray-500">Status</p><p className="font-bold text-gray-900 capitalize">{currentMember.status}</p></div>
-          <div><p className="text-xs text-gray-500">Joined</p><p className="font-bold text-gray-900">{currentMember.created_date ? new Date(currentMember.created_date).toLocaleDateString() : "—"}</p></div>
+          <div><p className="text-xs text-gray-500">Joined</p><p className="font-bold text-gray-900">{(currentMember.created_date || currentMember.created_at) ? new Date(currentMember.created_date || currentMember.created_at).toLocaleDateString() : "—"}</p></div>
         </div>
       </motion.div>
 
@@ -104,7 +110,7 @@ export default function Profile() {
           {fields.map(f => (
             <div key={f.key}>
               <Label>{f.label}</Label>
-              <Input value={form[f.key]} onChange={update(f.key)} type={f.type || "text"} />
+              <Input value={form[f.key]} onChange={update(f.key)} type={f.type || "text"} required />
             </div>
           ))}
         </div>
@@ -118,7 +124,7 @@ export default function Profile() {
           {gcashFields.map(f => (
             <div key={f.key}>
               <Label>{f.label}</Label>
-              <Input value={form[f.key]} onChange={update(f.key)} placeholder={f.placeholder || ""} />
+              <Input value={form[f.key]} onChange={update(f.key)} placeholder={f.placeholder || ""} required />
             </div>
           ))}
         </div>

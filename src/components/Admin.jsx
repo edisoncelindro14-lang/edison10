@@ -2,14 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X, Plus,
-  Search, Download, Copy, Trash2, RotateCcw, UserCog, Upload, Crown, Store, Zap, Camera, Maximize2, Briefcase,
+  Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X,
+  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, updateRecord, createRecord, deleteRecord } from "../lib/useData";
-import { supabase } from "../lib/supabase";
 import { getSessionMemberId } from "../lib/auth";
-import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, formatOrderNumber } from "../lib/helpers";
+import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
 
 export default function Admin({ panelRole } = {}) {
@@ -19,12 +18,12 @@ export default function Admin({ panelRole } = {}) {
   const [search, setSearch] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [editMember, setEditMember] = useState(null);
-  const [newProduct, setNewProduct] = useState({ name: "", category: "load", network: "Globe", price: "", description: "" });
-  const [productImage, setProductImage] = useState(null);
   const [gcash, setGcash] = useState({ gcash_number: "", gcash_name: "" });
   const [lightboxImage, setLightboxImage] = useState(null);
-  const [staffTopupMember, setStaffTopupMember] = useState(null);
-  const [staffTopupAmount, setStaffTopupAmount] = useState("");
+  const [confirmWithdrawal, setConfirmWithdrawal] = useState(null);
+  const [rejectWithdrawal, setRejectWithdrawal] = useState(null);
+  const [rejectRemarks, setRejectRemarks] = useState("");
+  const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
 
   const { data: members = [], refetch: refetchMembers, updateLocalRecord: updateLocalMember } = useTable("members");
   const memberId = getSessionMemberId();
@@ -33,7 +32,6 @@ export default function Admin({ panelRole } = {}) {
   const isSuperAdmin = currentUserRole === "super_admin";
   const isAdminRole = currentUserRole === "admin";
   const isReseller = currentUserRole === "reseller";
-  const canManageProducts = ["super_admin", "admin", "reseller"].includes(currentUserRole);
   const { data: transactions = [], addLocalRecord: addLocalTx, updateLocalRecord: updateLocalTx } = useTable("transactions");
   const { data: topupReqs = [], updateLocalRecord: updateLocalTopup } = useTable("conversion_requests");
   const { data: products = [] } = useTable("products");
@@ -68,7 +66,6 @@ export default function Admin({ panelRole } = {}) {
     ...(showTopups ? [{ id: "topups", label: `Top-ups${pendingTopups.length > 0 ? ` (${pendingTopups.length})` : ""}`, icon: Wallet }] : []),
     ...(showMembers ? [{ id: "members", label: `Members (${activeMembers.length})`, icon: Users }] : []),
     ...(showStaff ? [{ id: "staff", label: `Staff${staffMembers.length > 0 ? ` (${staffMembers.length})` : ""}`, icon: Briefcase }] : []),
-    { id: "products", label: "Products", icon: Store },
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
     { id: "joytel_screenshots", label: `JoyTel Screenshots${joytelScreenshots.length > 0 ? ` (${joytelScreenshots.length})` : ""}`, icon: Camera },
     { id: "settings", label: "Settings", icon: Settings },
@@ -120,51 +117,50 @@ export default function Admin({ panelRole } = {}) {
     }
   }
 
-  async function approveStaffTopup() {
-    const amount = parseFloat(staffTopupAmount);
-    if (!amount || amount < 1) { toast.error("Enter at least ₱1"); return; }
-
-    const gcashNum = staffTopupMember?.gcash_number;
-    const gcashName = staffTopupMember?.gcash_name || staffTopupMember?.full_name;
-    if (!gcashNum) {
-      toast.error("Staff member has no GCash number. Ask them to set it in their Profile.");
-      return;
-    }
-
-    const btn = document.getElementById("approve-staff-topup");
-    if (btn) { btn.disabled = true; btn.textContent = "Sending to PayMongo..."; }
-
+  async function confirmApproveWithdrawal() {
+    if (!confirmWithdrawal) return;
+    const w = confirmWithdrawal;
+    const staffMember = staffMembers.find(s => s.id === w.member_id);
+    const gcashNum = staffMember?.gcash_number;
+    const gcashName = staffMember?.gcash_name || staffMember?.full_name;
+    if (!gcashNum) { toast.error("Staff member has no GCash number. Ask them to set it in their Profile."); setConfirmWithdrawal(null); return; }
+    setProcessingWithdrawal(true);
     try {
       const payoutRes = await fetch("/api/paymongo/payout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount,
+          amount: Math.abs(w.amount),
           gcash_number: gcashNum,
           gcash_name: gcashName,
-          member_id: staffTopupMember.id,
+          transaction_id: w.id,
+          member_id: w.member_id,
         }),
       });
       const payoutData = await payoutRes.json();
-      if (!payoutRes.ok) throw new Error(payoutData.error || "PayMongo payout failed");
-
-      const refNum = payoutData.reference_number || generateRefNumber();
-      const processedBy = currentMember?.username || "unknown";
-      const newTx = await createRecord("transactions", {
-        member_id: staffTopupMember.id,
-        type: "adjustment",
-        amount,
-        description: `Staff account top-up approved | PayMongo Ref: ${refNum} | By: @${processedBy}`,
-        status: "completed",
-      });
-      addLocalTx(newTx);
-      toast.success(`Staff account topped up with ${money(amount)} | PayMongo Ref: ${refNum}`);
-      setStaffTopupMember(null);
-      setStaffTopupAmount("");
+      if (!payoutRes.ok) throw new Error(payoutData.error || "Payout failed");
+      updateLocalTx(w.id, { status: payoutData.status === "succeeded" ? "completed" : "pending", description: `Staff withdrawal payout to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}` });
+      toast.success(`Payout sent to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}`);
+      setConfirmWithdrawal(null);
     } catch (err) {
-      toast.error("Failed to top up staff account: " + (err?.message || "Unknown error"));
-      if (btn) { btn.disabled = false; btn.textContent = "Approve & Credit Wallet"; }
+      toast.error("Payout failed: " + (err?.message || "Unknown error"));
     }
+    setProcessingWithdrawal(false);
+  }
+
+  async function confirmRejectWithdrawal() {
+    if (!rejectWithdrawal || !rejectRemarks.trim()) return;
+    setProcessingWithdrawal(true);
+    try {
+      await updateRecord("transactions", rejectWithdrawal.id, { status: "cancelled", remarks: rejectRemarks.trim() });
+      updateLocalTx(rejectWithdrawal.id, { status: "cancelled", remarks: rejectRemarks.trim() });
+      toast.success("Withdrawal rejected");
+      setRejectWithdrawal(null);
+      setRejectRemarks("");
+    } catch {
+      toast.error("Failed to reject");
+    }
+    setProcessingWithdrawal(false);
   }
 
   function parseAdminNote(note) {
@@ -209,22 +205,6 @@ export default function Admin({ panelRole } = {}) {
       console.error("Role update failed:", err);
       toast.error("Failed to update role: " + (err?.message || "Unknown error"));
     }
-  }
-
-  async function uploadProductImage(file) {
-    if (!file) return null;
-    const fileName = `product_${Date.now()}_${file.name}`;
-    const { error } = await supabase.storage.from("products").upload(fileName, file);
-    if (error) {
-      // Fallback: use a data URL for preview if storage fails
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      });
-    }
-    const { data: url } = supabase.storage.from("products").getPublicUrl(fileName);
-    return url?.publicUrl || null;
   }
 
   async function saveGcash() {
@@ -506,16 +486,15 @@ export default function Admin({ panelRole } = {}) {
             </div>
           ) : (
             <>
-              {/* Staff accounts with top-up button */}
+              {/* Staff accounts */}
               <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
                   <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Briefcase className="w-5 h-5 text-indigo-500" /> Staff Accounts</h2>
-                  <p className="text-sm text-gray-500 mt-1">Use the special Top Up button to credit a staff account. The admin approves the amount before the wallet is credited.</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead><tr className="border-b border-gray-100">
-                      {["Name", "Username", "Balance", "Actions"].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
+                      {["Name", "Username", "Balance"].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
                     </tr></thead>
                     <tbody>
                       {staffMembers.map(m => {
@@ -526,14 +505,6 @@ export default function Admin({ panelRole } = {}) {
                             <td className="px-6 py-4 text-sm font-medium text-gray-900">{m.full_name}</td>
                             <td className="px-6 py-4 text-sm text-gray-600">@{m.username}</td>
                             <td className="px-6 py-4 text-sm font-bold text-gray-900">{money(balance)}</td>
-                            <td className="px-6 py-4">
-                              <button
-                                onClick={() => { setStaffTopupMember(m); setStaffTopupAmount(""); }}
-                                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 font-medium text-xs flex items-center gap-1.5"
-                              >
-                                <Wallet className="w-4 h-4" /> Top Up Staff
-                              </button>
-                            </td>
                           </tr>
                         );
                       })}
@@ -564,35 +535,8 @@ export default function Admin({ panelRole } = {}) {
                               <td className="px-6 py-4 text-sm text-gray-400">{formatDate(w.created_at || w.created_date, "MMM d, yyyy")}</td>
                               <td className="px-6 py-4">
                                 <div className="flex gap-3">
-                                  <button onClick={async () => {
-                                    const staffMember = staffMembers.find(s => s.id === w.member_id);
-                                    const gcashNum = staffMember?.gcash_number;
-                                    const gcashName = staffMember?.gcash_name || staffMember?.full_name;
-                                    if (!gcashNum) { toast.error("Staff member has no GCash number. Ask them to set it in their Profile."); return; }
-                                    const btn = document.getElementById(`approve-wd-${w.id}`);
-                                    if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
-                                    try {
-                                      const payoutRes = await fetch("/api/paymongo/payout", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({
-                                          amount: Math.abs(w.amount),
-                                          gcash_number: gcashNum,
-                                          gcash_name: gcashName,
-                                          transaction_id: w.id,
-                                          member_id: w.member_id,
-                                        }),
-                                      });
-                                      const payoutData = await payoutRes.json();
-                                      if (!payoutRes.ok) throw new Error(payoutData.error || "Payout failed");
-                                      updateLocalTx(w.id, { status: payoutData.status === "succeeded" ? "completed" : "pending", description: `Staff withdrawal payout to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}` });
-                                      toast.success(`Payout sent to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}`);
-                                    } catch (err) {
-                                      toast.error("Payout failed: " + (err?.message || "Unknown error"));
-                                      if (btn) { btn.disabled = false; btn.textContent = "Approve"; }
-                                    }
-                                  }} id={`approve-wd-${w.id}`} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium text-xs flex items-center gap-1"><Check className="w-4 h-4" /> Approve</button>
-                                  <button onClick={async () => { try { await updateRecord("transactions", w.id, { status: "cancelled" }); updateLocalTx(w.id, { status: "cancelled" }); toast.success("Withdrawal rejected"); } catch { toast.error("Failed to reject"); } }} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium text-xs flex items-center gap-1"><X className="w-4 h-4" /> Reject</button>
+                                  <button onClick={() => setConfirmWithdrawal(w)} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium text-xs flex items-center gap-1"><Check className="w-4 h-4" /> Approve</button>
+                                  <button onClick={() => { setRejectWithdrawal(w); setRejectRemarks(""); }} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium text-xs flex items-center gap-1"><X className="w-4 h-4" /> Reject</button>
                                 </div>
                               </td>
                             </tr>
@@ -608,148 +552,62 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
-      {/* Staff Top-up Modal */}
-      {staffTopupMember && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={() => setStaffTopupMember(null)}>
+      {/* Confirm Approve Withdrawal Modal */}
+      {confirmWithdrawal && (
+        <div className="fixed inset-0 z-100 bg-black/50 flex items-center justify-center p-4" onClick={() => !processingWithdrawal && setConfirmWithdrawal(null)}>
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
-                <Briefcase className="w-5 h-5 text-white" />
+              <div className="p-2.5 bg-linear-to-br from-green-500 to-emerald-600 rounded-xl">
+                <Check className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Top Up Staff Account</h3>
-                <p className="text-sm text-gray-500">{staffTopupMember.full_name} · @{staffTopupMember.username}</p>
+                <h3 className="text-lg font-bold text-gray-900">Approve Withdrawal</h3>
+                <p className="text-sm text-gray-500">{staffMembers.find(s => s.id === confirmWithdrawal.member_id)?.full_name || "—"}</p>
               </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <Label>Top-up Amount (₱)</Label>
-                <Input type="number" value={staffTopupAmount} onChange={e => setStaffTopupAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
-              </div>
-              <div className="flex gap-3">
-                <Button id="approve-staff-topup" onClick={approveStaffTopup} className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-                  <Check className="w-4 h-4 mr-2" /> Approve & Credit Wallet
-                </Button>
-                <Button onClick={() => setStaffTopupMember(null)} variant="outline" className="border-gray-200">Cancel</Button>
-              </div>
-              <p className="text-xs text-gray-400">The staff member's wallet will be credited immediately upon approval.</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Send <span className="font-bold text-gray-900">{money(Math.abs(confirmWithdrawal.amount))}</span> to this staff member's GCash account via PayMongo? This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button onClick={confirmApproveWithdrawal} disabled={processingWithdrawal} className="flex-1 bg-linear-to-r from-green-500 to-emerald-600 text-white">
+                <Check className="w-4 h-4 mr-2" /> {processingWithdrawal ? "Sending..." : "Yes, Send Payout"}
+              </Button>
+              <Button onClick={() => setConfirmWithdrawal(null)} disabled={processingWithdrawal} variant="outline" className="border-gray-200">Cancel</Button>
             </div>
           </motion.div>
         </div>
       )}
 
-      {/* Products Tab */}
-      {tab === "products" && (
-        <div className="space-y-6">
-          {canManageProducts && (
-          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-amber-500" /> Add Product</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div><Label>Product Name</Label><Input value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="e.g. Globe Load ₱50" /></div>
-              <div>
-                <Label>Category</Label>
-                <select value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
-                  className="w-full h-12 rounded-xl border border-gray-200 px-4 outline-none focus:border-amber-500">
-                  <option value="load">E-Load</option>
-                  <option value="sim">SIM Card</option>
-                </select>
+      {/* Reject Withdrawal Modal */}
+      {rejectWithdrawal && (
+        <div className="fixed inset-0 z-100 bg-black/50 flex items-center justify-center p-4" onClick={() => !processingWithdrawal && setRejectWithdrawal(null)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-linear-to-br from-red-500 to-rose-600 rounded-xl">
+                <X className="w-5 h-5 text-white" />
               </div>
               <div>
-                <Label>Network</Label>
-                <select value={newProduct.network} onChange={e => setNewProduct({ ...newProduct, network: e.target.value })}
-                  className="w-full h-12 rounded-xl border border-gray-200 px-4 outline-none focus:border-amber-500">
-                  {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div><Label>Price (₱)</Label><Input type="number" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} /></div>
-            </div>
-            <div className="mt-4"><Label>Description</Label><Input value={newProduct.description} onChange={e => setNewProduct({ ...newProduct, description: e.target.value })} placeholder="optional" /></div>
-            {/* Product Image Upload */}
-            <div className="mt-4">
-              <Label>Product Image</Label>
-              <div className="flex items-center gap-4">
-                {productImage ? (
-                  <img src={URL.createObjectURL(productImage)} alt="Preview" className="w-24 h-24 rounded-xl object-cover border border-gray-200" />
-                ) : (
-                  <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400">
-                    <Smartphone className="w-8 h-8" />
-                  </div>
-                )}
-                <div>
-                  <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer text-sm font-medium text-gray-700">
-                    <Upload className="w-4 h-4" /> Upload Image
-                    <input type="file" accept="image/*" className="hidden" onChange={e => {
-                      const file = e.target.files[0];
-                      if (file) { setProductImage(file); toast.success("Image selected"); }
-                    }} />
-                  </label>
-                  {productImage && <button onClick={() => setProductImage(null)} className="ml-2 text-sm text-red-500 hover:text-red-700">Remove</button>}
-                </div>
+                <h3 className="text-lg font-bold text-gray-900">Reject Withdrawal</h3>
+                <p className="text-sm text-gray-500">{staffMembers.find(s => s.id === rejectWithdrawal.member_id)?.full_name || "—"}</p>
               </div>
             </div>
-            <Button
-              onClick={async () => {
-                if (!newProduct.name || !newProduct.price) { toast.error("Name and price required"); return; }
-                try {
-                  let imageUrl = null;
-                  if (productImage) {
-                    imageUrl = await uploadProductImage(productImage);
-                  }
-                  await createRecord("products", { ...newProduct, price: parseFloat(newProduct.price), is_active: true, image_url: imageUrl });
-                  toast.success("Product added!");
-                  setNewProduct({ name: "", category: "load", network: "Globe", price: "", description: "" });
-                  setProductImage(null);
-                  window.location.reload();
-                } catch { toast.error("Failed to add product (run SQL migration first)"); }
-              }}
-              className="mt-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white"><Plus className="w-4 h-4 mr-2" /> Add Product</Button>
-            <p className="text-xs text-gray-400 mt-2">Upload an image, set the price and details. Products appear in the online shop immediately.</p>
-          </div>
-          )}
-
-          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-900">Product Catalog</h2></div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead><tr className="border-b border-gray-100">
-                  {["Image", "Name", "Category", "Network", "Price", "Status", canManageProducts ? "Actions" : ""].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {allProducts.map(p => (
-                    <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        {p.image_url ? (
-                          <img src={p.image_url} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
-                        ) : (
-                          <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-                            {p.category === "sim" ? <Smartphone className="w-5 h-5 text-white" /> : <Zap className="w-5 h-5 text-white" />}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.name}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600 capitalize">{p.category}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{p.network || "—"}</td>
-                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{money(p.price)}</td>
-                      <td className="px-6 py-4"><Badge className={p.is_active !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>{p.is_active !== false ? "Active" : "Inactive"}</Badge></td>
-                      {canManageProducts && (
-                        <td className="px-6 py-4">
-                          <div className="flex gap-1">
-                            <button onClick={async () => { try { await updateRecord("products", p.id, { is_active: p.is_active === false }); toast.success("Product updated"); window.location.reload(); } catch { toast.error("Failed to update"); } }}
-                              className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200" title="Toggle active">
-                              {p.is_active !== false ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                            </button>
-                            <button onClick={async () => { if (confirm("Delete this product?")) { try { await deleteRecord("products", p.id); toast.success("Product deleted"); window.location.reload(); } catch { toast.error("Failed to delete"); } } }}
-                              className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              <div>
+                <Label>Remarks (required)</Label>
+                <textarea value={rejectRemarks} onChange={e => setRejectRemarks(e.target.value)} rows={3}
+                  placeholder="Explain why this withdrawal is being rejected"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none mt-1" />
+              </div>
+              <div className="flex gap-3">
+                <Button onClick={confirmRejectWithdrawal} disabled={processingWithdrawal || !rejectRemarks.trim()} className="flex-1 bg-linear-to-r from-red-500 to-rose-600 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+                  <X className="w-4 h-4 mr-2" /> {processingWithdrawal ? "Submitting..." : "Submit Rejection"}
+                </Button>
+                <Button onClick={() => setRejectWithdrawal(null)} disabled={processingWithdrawal} variant="outline" className="border-gray-200">Cancel</Button>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 

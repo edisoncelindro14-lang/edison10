@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice } from "../lib/helpers";
+import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -36,10 +37,12 @@ export default function Products() {
   const [search, setSearch] = useState("");
   const [filterNetwork, setFilterNetwork] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [cart, setCart] = useState([]);
+  const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileNumber, setMobileNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [addressEdited, setAddressEdited] = useState(false);
+  const [mobileEdited, setMobileEdited] = useState(false);
   const [buying, setBuying] = useState(false);
   const [editProduct, setEditProduct] = useState(null); // null = closed, {} = new, {id...} = editing
   const [draggedId, setDraggedId] = useState(null);
@@ -48,13 +51,19 @@ export default function Products() {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: products = [], refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
+
+  // Prefill delivery details from the member's profile, unless they've edited them for this order
+  useEffect(() => {
+    if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
+    if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+  }, [currentMember?.id]);
 
   const memberRole = currentMember?.role;
   const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
 
-  const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
+  const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   // For admin/reseller, show ALL products (including inactive). For regular users, only active.
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
   const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
@@ -76,20 +85,8 @@ export default function Products() {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   function addToCart(product) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === product.id);
-      if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...product, qty: 1 }];
-    });
+    cartAddToCart(product);
     toast.success(`${product.name} added to cart`);
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => prev.filter(i => i.id !== id));
-  }
-
-  function updateQty(id, delta) {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i));
   }
 
   function handleEditSaved(updatedProduct) {
@@ -138,35 +135,49 @@ export default function Products() {
     setSortVersion(v => v + 1);
   }
 
-  async function handleCheckout() {
+  async function handleCheckout(paymentMethod) {
     if (!currentMember) return;
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
     if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
-    if (walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
+    const isWallet = paymentMethod === "wallet";
+    if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
 
     setBuying(true);
     try {
+      const txIds = [];
       for (const item of cart) {
         const details = item.category === "load"
           ? `${item.name} x${item.qty} → ${mobileNumber}`
           : `${item.name} x${item.qty} → ${address}`;
-        await createRecord("transactions", {
+        const tx = await createRecord("transactions", {
           member_id: currentMember.id,
-          type: "purchase",
+          type: isWallet ? "withdrawal" : "purchase",
           amount: -(item.price * item.qty),
-          description: details,
+          description: isWallet ? details : `${details} | Pay to Kabaro`,
           status: "pending",
         });
+        txIds.push(tx.id);
       }
-      toast.success("Order placed successfully! Admin will process it shortly.");
-      setCart([]);
-      setMobileNumber("");
-      setAddress("");
-      setCheckoutOpen(false);
+
+      if (isWallet) {
+        toast.success("Order placed successfully! Admin will process it shortly.");
+        clearCart();
+        setCheckoutOpen(false);
+      } else {
+        const res = await fetch("/api/paymongo/create-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: cartTotal, member_id: currentMember.id, purpose: "purchase", tx_ids: txIds }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create payment link");
+        clearCart();
+        window.location.href = data.checkout_url;
+      }
     } catch (err) {
-      toast.error("Failed to place order");
+      toast.error(err?.message || "Failed to place order");
     }
     setBuying(false);
   }
@@ -265,11 +276,14 @@ export default function Products() {
                 <p className="font-bold text-sm text-gray-900">{p.name}</p>
                 <p className="text-xs text-gray-500 mt-1">{p.description || p.network}</p>
                 <div className="flex items-center justify-between mt-3">
-                  <p className="text-xl font-extrabold text-orange-600">{money(p.price)}</p>
+                  <div>
+                    <p className="text-xl font-extrabold text-orange-600">{money(getFinalPrice(p))}</p>
+                    {p.discount_percent > 0 && <span className="text-xs text-gray-400 line-through">{money(p.price)}</span>}
+                  </div>
                   <Button size="sm" disabled={!isAvailable}
                     onClick={(e) => { e.stopPropagation(); addToCart(p); }}
-                    className={isAvailable ? "bg-orange-500 hover:bg-orange-600 text-white" : "bg-gray-300 text-gray-400 cursor-not-allowed"}>
-                    <ShoppingCart className="w-3.5 h-3.5" />
+                    className={isAvailable ? "bg-orange-500 hover:bg-orange-600 text-white h-10 w-10 p-0" : "bg-gray-300 text-gray-400 cursor-not-allowed h-10 w-10 p-0"}>
+                    <ShoppingCart className="w-5 h-5" />
                   </Button>
                 </div>
               </div>
@@ -317,24 +331,40 @@ export default function Products() {
                   </div>
                   {cart.some(i => i.category === "load") && (
                     <div className="mb-4">
-                      <label className="text-sm font-medium text-gray-700">Mobile Number (for load)</label>
-                      <Input value={mobileNumber} onChange={e => setMobileNumber(e.target.value)} placeholder="09XX XXX XXXX" className="mt-1" />
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Mobile Number (for load)</label>
+                        <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-orange-600 hover:underline">Use a different number</button>
+                      </div>
+                      <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
                     </div>
                   )}
                   {cart.some(i => i.category === "sim") && (
                     <div className="mb-4">
-                      <label className="text-sm font-medium text-gray-700">Delivery Address (for SIM)</label>
-                      <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="House #, Street, City" className="mt-1" />
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Delivery Address (for SIM)</label>
+                        <button type="button" onClick={() => { setAddressEdited(true); setAddress(""); }} className="text-xs text-orange-600 hover:underline">Use a different address</button>
+                      </div>
+                      <Input value={address} onChange={e => { setAddressEdited(true); setAddress(e.target.value); }} placeholder="House #, Street, City" className="mt-1" />
                     </div>
                   )}
-                  <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-500">Wallet Balance</span>
+                    <span className="font-bold text-emerald-600">{money(walletBalance)}</span>
+                  </div>
+                  <div className="border-t border-gray-100 pt-4 flex items-center justify-between mb-4">
                     <span className="font-bold text-gray-900">Total: {money(cartTotal)}</span>
                     {walletBalance < cartTotal && <span className="text-sm text-red-600">Insufficient balance</span>}
                   </div>
-                  <Button onClick={handleCheckout} disabled={buying || walletBalance < cartTotal}
-                    className="w-full mt-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white h-12 rounded-xl font-bold">
-                    {buying ? "Placing order..." : <><Check className="w-5 h-5 mr-2" /> Place Order</>}
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button onClick={() => handleCheckout("kabaro")} disabled={buying}
+                      className="bg-gradient-to-r from-amber-500 to-orange-600 text-white h-12 rounded-xl font-bold">
+                      {buying ? "Placing..." : <><ShoppingCart className="w-5 h-5 mr-2" /> Pay via PayMongo</>}
+                    </Button>
+                    <Button onClick={() => handleCheckout("wallet")} disabled={buying || walletBalance < cartTotal}
+                      className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white h-12 rounded-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                      {buying ? "Placing..." : <><Check className="w-5 h-5 mr-2" /> Pay from Wallet</>}
+                    </Button>
+                  </div>
                 </>
               )}
             </div>

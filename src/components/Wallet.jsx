@@ -15,7 +15,7 @@ export default function Wallet() {
   const [submitting, setSubmitting] = useState(false);
 
   const { data: members = [] } = useTable("members");
-  const { data: transactions = [] } = useTable("transactions");
+  const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions");
   const { data: topupReqs = [] } = useTable("conversion_requests");
   const { currentMember } = useCurrentMember(members);
 
@@ -64,15 +64,17 @@ export default function Wallet() {
     const amount = parseFloat(withdrawAmount);
     if (!amount || amount < 1) { toast.error("Enter at least ₱1"); return; }
     if (amount > walletBalance) { toast.error("Insufficient balance"); return; }
+    if (!currentMember.gcash_number) { toast.error("Add your GCash number in Profile before requesting a withdrawal"); return; }
     setSubmitting(true);
     try {
-      await createRecord("transactions", {
+      const tx = await createRecord("transactions", {
         member_id: currentMember.id,
         type: "withdrawal",
         amount: -amount,
         description: "Staff withdrawal request",
         status: "pending",
       });
+      addLocalTx(tx);
       toast.success("Withdrawal request submitted — awaiting admin approval");
       setWithdrawAmount("");
     } catch (err) {
@@ -156,7 +158,7 @@ export default function Wallet() {
               <label className="text-sm font-medium text-gray-700">Withdrawal Amount (₱)</label>
               <Input type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
             </div>
-            <Button onClick={handleWithdraw} disabled={submitting} className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white h-12 px-8">
+            <Button onClick={handleWithdraw} disabled={submitting || !currentMember.gcash_number} className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white h-12 px-8 disabled:opacity-40 disabled:cursor-not-allowed">
               {submitting ? "Submitting..." : "Request Withdrawal"}
             </Button>
           </div>
@@ -221,6 +223,7 @@ export default function Wallet() {
                     <p className="font-medium text-gray-900">{mainDesc}</p>
                     {refPart && <p className="text-xs text-gray-400 font-mono">{refPart}</p>}
                     {byPart && <p className="text-xs text-gray-400">{byPart}</p>}
+                    {tx.status === "cancelled" && tx.remarks && <p className="text-xs text-red-500 mt-0.5">Reason: {tx.remarks}</p>}
                     <p className="text-sm text-gray-500">{formatDate(tx.created_at || tx.created_date)}</p>
                   </div>
                   <div className="text-right">
