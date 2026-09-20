@@ -64,7 +64,12 @@ export default async function handler(req, res) {
     const sourceAccount = wallet.attributes?.source_account || wallet.source_account;
 
     if (!sourceAccount || !sourceAccount.number) {
-      return res.status(400).json({ error: "Wallet source account not found" });
+      const isLiveKey = SECRET_KEY.startsWith("sk_live_");
+      return res.status(400).json({
+        error: isLiveKey
+          ? "PayMongo wallet has no linked settlement account. Check your PayMongo Dashboard → Balance/Wallet to confirm it's activated and funded."
+          : "PayMongo wallet has no linked settlement account. This usually means PAYMONGO_SECRET_KEY is a TEST key (sk_test_...) — payouts/disbursements require a LIVE key from a business-verified (KYB-approved) PayMongo account. Check PayMongo Dashboard → Developers → API Keys and → Balance/Wallet.",
+      });
     }
 
     // Step 2: Look up GCash BIC from receiving institutions (fallback to default)

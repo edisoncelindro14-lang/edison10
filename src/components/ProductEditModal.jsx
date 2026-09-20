@@ -20,6 +20,9 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
     network: product?.network || "Globe",
     image_url: product?.image_url || "",
     is_active: product?.is_active !== false,
+    best_seller: product?.best_seller || false,
+    has_discount: !!product?.discount_percent,
+    discount_percent: product?.discount_percent || "",
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(product?.image_url || "");
@@ -68,6 +71,8 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
         network: form.network,
         image_url: imageUrl,
         is_active: form.is_active,
+        best_seller: form.best_seller,
+        discount_percent: form.has_discount ? (parseFloat(form.discount_percent) || 0) : 0,
       };
 
       if (isEditing) {
@@ -190,6 +195,38 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
               className={`relative w-12 h-6 rounded-full transition ${form.is_active ? "bg-green-500" : "bg-gray-300"}`}>
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${form.is_active ? "left-6" : "left-0.5"}`} />
             </button>
+          </div>
+
+          {/* Best Seller toggle */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Best Seller</p>
+              <p className="text-xs text-gray-500">Shows a "BEST SELLER" badge on the product</p>
+            </div>
+            <button onClick={() => update("best_seller", !form.best_seller)}
+              className={`relative w-12 h-6 rounded-full transition ${form.best_seller ? "bg-orange-500" : "bg-gray-300"}`}>
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${form.best_seller ? "left-6" : "left-0.5"}`} />
+            </button>
+          </div>
+
+          {/* Discount toggle + amount */}
+          <div className="p-3 bg-gray-50 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Discount</p>
+                <p className="text-xs text-gray-500">Shows a discount badge and % off the price</p>
+              </div>
+              <button onClick={() => update("has_discount", !form.has_discount)}
+                className={`relative w-12 h-6 rounded-full transition ${form.has_discount ? "bg-red-500" : "bg-gray-300"}`}>
+                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${form.has_discount ? "left-6" : "left-0.5"}`} />
+              </button>
+            </div>
+            {form.has_discount && (
+              <div>
+                <Label>Discount Percent (%)</Label>
+                <Input type="number" min="0" max="100" value={form.discount_percent} onChange={e => update("discount_percent", e.target.value)} placeholder="e.g. 20" />
+              </div>
+            )}
           </div>
         </div>
 

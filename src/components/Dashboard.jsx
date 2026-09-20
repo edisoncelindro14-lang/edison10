@@ -4,16 +4,16 @@ import { motion } from "framer-motion";
 import { Wallet, ArrowRight, ShoppingBag, Zap, Smartphone, TrendingUp, Crown, Shield, Store, Pencil, LayoutDashboard, User } from "lucide-react";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { supabase } from "../lib/supabase";
-import { money, formatDate, FALLBACK_PRODUCTS, NETWORK_COLORS } from "../lib/helpers";
+import { money, formatDate, FALLBACK_PRODUCTS, NETWORK_COLORS, getFinalPrice } from "../lib/helpers";
 import { Button } from "./ui";
 
 export default function Dashboard() {
   const { data: members = [], isLoading } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: products = [] } = useTable("products");
+  const { data: products = [], isLoading: productsLoading } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
-  const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
+  const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
 
   const myTx = currentMember ? transactions.filter(t => t.member_id === currentMember.id) : [];
   const walletBalance = myTx
@@ -166,7 +166,7 @@ export default function Dashboard() {
                   {p.category === "sim" ? <Smartphone className="w-6 h-6 text-white" /> : <Zap className="w-6 h-6 text-white" />}
                 </div>
                 <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
-                <p className="text-lg font-extrabold text-orange-600 mt-1">{money(p.price)}</p>
+                <p className="text-lg font-extrabold text-orange-600 mt-1">{money(getFinalPrice(p))}</p>
               </div>
             </Link>
           ))}

@@ -46,36 +46,6 @@ export default async function handler(req, res) {
   const rawBody = await getRawBody(req);
   const sigHeader = req.headers["paymongo-signature"] || "";
 
-  {
-    const KNOWN_CORRECT_SECRET = "whsk_WQsW5QXFjk9eXGEjnxBgRGUV";
-    console.log(
-      "DEBUG secret check: length=", WEBHOOK_SECRET.length,
-      "masked=", WEBHOOK_SECRET.slice(0, 6) + "..." + WEBHOOK_SECRET.slice(-4),
-      "matchesKnownCorrect=", WEBHOOK_SECRET === KNOWN_CORRECT_SECRET,
-      "matchesTrimmed=", WEBHOOK_SECRET.trim() === KNOWN_CORRECT_SECRET
-    );
-  }
-
-  {
-    const parts = Object.fromEntries((sigHeader || "").split(",").map(p => p.split("=")));
-    const target = parts.li || parts.te;
-    const candidates = {
-      "t.rawBody": `${parts.t}.${rawBody}`,
-      "rawBody only": rawBody,
-      "t+rawBody (no dot)": `${parts.t}${rawBody}`,
-      "rawBody.t": `${rawBody}.${parts.t}`,
-    };
-    console.log("DEBUG target(li):", target);
-    console.log("DEBUG rawBody length:", rawBody.length, "first 80:", rawBody.slice(0, 80));
-    console.log("DEBUG rawBody last 80:", rawBody.slice(-80));
-    for (const [name, payload] of Object.entries(candidates)) {
-      const digestHex = crypto.createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("hex");
-      const digestB64 = crypto.createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("base64");
-      console.log(`DEBUG [${name}] hex=${digestHex} MATCH_HEX=${digestHex === target}`);
-      console.log(`DEBUG [${name}] b64=${digestB64} MATCH_B64=${digestB64 === target}`);
-    }
-  }
-
   if (!verifySignature(rawBody, sigHeader, WEBHOOK_SECRET)) {
     console.error("PayMongo webhook: invalid signature");
     return res.status(401).json({ error: "Invalid signature" });
@@ -94,6 +64,30 @@ export default async function handler(req, res) {
     const memberIdMatch = remarks.match(/member_id:([a-zA-Z0-9-]+)/);
     const memberId = memberIdMatch ? memberIdMatch[1] : null;
     const linkId = eventData?.id;
+    const isPurchase = remarks.startsWith("purpose:purchase");
+
+    if (isPurchase) {
+      // Shop checkout paid via PayMongo — the pending `transactions` rows
+      // already exist (created client-side before the redirect); just
+      // flip them to completed instead of crediting the wallet.
+      const txIdsMatch = remarks.match(/tx_ids:([a-zA-Z0-9,-]+)/);
+      const txIds = txIdsMatch ? txIdsMatch[1].split(",").filter(Boolean) : [];
+      if (txIds.length > 0) {
+        try {
+          const { data: updated, error } = await supabase
+            .from("transactions")
+            .update({ status: "completed" })
+            .in("id", txIds)
+            .eq("status", "pending")
+            .select();
+          if (error) console.error("Purchase fulfillment error:", error.message);
+          else console.log(`Purchase fulfilled: ${updated?.length || 0} transaction(s) for link ${linkId} | Ref: ${referenceNumber || "N/A"}`);
+        } catch (err) {
+          console.error("Purchase fulfillment error:", err.message);
+        }
+      }
+      return res.status(200).json({ received: true, type: eventType });
+    }
 
     if (memberId && amountPaid > 0) {
       try {

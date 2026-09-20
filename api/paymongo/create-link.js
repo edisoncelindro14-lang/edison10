@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Supabase not configured" });
   }
 
-  const { amount, member_id } = req.body || {};
+  const { amount, member_id, purpose, tx_ids } = req.body || {};
   const parsedAmount = parseFloat(amount);
   if (!parsedAmount || parsedAmount < 1) {
     return res.status(400).json({ error: "Amount must be at least ₱1" });
@@ -32,8 +32,15 @@ export default async function handler(req, res) {
   if (!member_id) {
     return res.status(400).json({ error: "member_id is required" });
   }
+  const isPurchase = purpose === "purchase";
+  if (isPurchase && (!Array.isArray(tx_ids) || tx_ids.length === 0)) {
+    return res.status(400).json({ error: "tx_ids is required for purchase payments" });
+  }
 
   const amountInCentavos = Math.round(parsedAmount * 100);
+  const remarks = isPurchase
+    ? `purpose:purchase|member_id:${member_id}|tx_ids:${tx_ids.join(",")}`
+    : `member_id:${member_id}`;
 
   try {
     const response = await fetch("https://api.paymongo.com/v1/links", {
@@ -46,8 +53,8 @@ export default async function handler(req, res) {
         data: {
           attributes: {
             amount: amountInCentavos,
-            description: `Wallet top-up ₱${parsedAmount}`,
-            remarks: `member_id:${member_id}`,
+            description: isPurchase ? `Kabaro order payment ₱${parsedAmount}` : `Wallet top-up ₱${parsedAmount}`,
+            remarks,
           },
         },
       }),
@@ -61,18 +68,23 @@ export default async function handler(req, res) {
     const link = data.data.attributes;
     const linkId = data.data.id;
 
-    const { error: dbError } = await supabase.from("conversion_requests").insert({
-      member_id,
-      amount: parsedAmount,
-      status: "pending",
-      admin_note: JSON.stringify({
-        payment_method: "paymongo",
-        link_id: linkId,
-        reference_number: link.reference_number,
-        checkout_url: link.checkout_url,
-      }),
-    });
-    if (dbError) console.error("conversion_requests insert error:", dbError.message);
+    // Purchases already have their own pending `transactions` rows (created
+    // client-side before this call) — only wallet top-ups need a
+    // conversion_requests row for the webhook to find and approve.
+    if (!isPurchase) {
+      const { error: dbError } = await supabase.from("conversion_requests").insert({
+        member_id,
+        amount: parsedAmount,
+        status: "pending",
+        admin_note: JSON.stringify({
+          payment_method: "paymongo",
+          link_id: linkId,
+          reference_number: link.reference_number,
+          checkout_url: link.checkout_url,
+        }),
+      });
+      if (dbError) console.error("conversion_requests insert error:", dbError.message);
+    }
 
     return res.status(200).json({
       checkout_url: link.checkout_url,

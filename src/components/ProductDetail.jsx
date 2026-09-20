@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star, Truck, Shield, RotateCcw, ArrowRight } from "lucide-react";
+import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
-import { money, NETWORK_COLORS, FALLBACK_PRODUCTS, TRUST_BADGES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getStockCount } from "../lib/helpers";
+import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -16,6 +16,8 @@ export default function ProductDetail({ productId }) {
   const [qty, setQty] = useState(1);
   const [mobileNumber, setMobileNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [addressEdited, setAddressEdited] = useState(false);
+  const [mobileEdited, setMobileEdited] = useState(false);
   const [buying, setBuying] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
 
@@ -23,6 +25,12 @@ export default function ProductDetail({ productId }) {
   const { data: transactions = [] } = useTable("transactions");
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
+
+  // Prefill delivery details from the member's profile, unless they've edited them for this order
+  useEffect(() => {
+    if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
+    if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+  }, [currentMember?.id]);
 
   const memberRole = currentMember?.role;
   const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
@@ -49,7 +57,8 @@ export default function ProductDetail({ productId }) {
     );
   }
 
-  const total = product.price * qty;
+  const finalPrice = getFinalPrice(product);
+  const total = finalPrice * qty;
   const hasLoad = product.category === "load";
   const hasSim = product.category === "sim";
   const isAvailable = product.is_active !== false;
@@ -57,7 +66,6 @@ export default function ProductDetail({ productId }) {
   const reviewCount = getProductReviewCount(product);
   const badge = getProductBadge(product);
   const discount = getDiscountPercent(product);
-  const stockCount = getStockCount(product);
   const gradient = NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600";
 
   // Related products (same category or network, exclude current)
@@ -69,17 +77,29 @@ export default function ProductDetail({ productId }) {
     if (!currentMember) { nav("/MemberLogin"); return; }
     if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
-    if (paymentMethod === "wallet" && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
+    const isWallet = paymentMethod === "wallet";
+    if (isWallet && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
-      const isWallet = paymentMethod === "wallet";
       const txType = isWallet ? "withdrawal" : "purchase";
       const description = isWallet ? details : `${details} | Pay to Kabaro`;
-      await createRecord("transactions", { member_id: currentMember.id, type: txType, amount: -(product.price * qty), description, status: "pending" });
-      toast.success(isWallet ? "Order placed! Paid from wallet." : "Order placed! Please pay to Kabaro — admin will confirm.");
-      nav("/Orders");
-    } catch { toast.error("Failed to place order"); }
+      const tx = await createRecord("transactions", { member_id: currentMember.id, type: txType, amount: -total, description, status: "pending" });
+
+      if (isWallet) {
+        toast.success("Order placed! Paid from wallet.");
+        nav("/Orders");
+      } else {
+        const res = await fetch("/api/paymongo/create-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: total, member_id: currentMember.id, purpose: "purchase", tx_ids: [tx.id] }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to create payment link");
+        window.location.href = data.checkout_url;
+      }
+    } catch (err) { toast.error(err?.message || "Failed to place order"); }
     setBuying(false);
   }
 
@@ -140,13 +160,14 @@ export default function ProductDetail({ productId }) {
               <span className="text-sm font-medium text-gray-700 ml-1">{rating.toFixed(1)}</span>
             </div>
             <span className="text-sm text-gray-400">{reviewCount.toLocaleString()} Reviews</span>
-            {isAvailable && <span className="text-sm text-green-600 font-medium">In stock ({stockCount})</span>}
           </div>
 
           {/* Price */}
           <div className="flex items-baseline gap-3 mt-4">
-            <span className="text-3xl md:text-4xl font-extrabold text-indigo-600">{money(product.price)}</span>
-            {product.load_amount && <span className="text-gray-400 text-lg line-through">₱{product.load_amount}</span>}
+            <span className="text-3xl md:text-4xl font-extrabold text-indigo-600">{money(finalPrice)}</span>
+            {product.discount_percent > 0 ? (
+              <span className="text-gray-400 text-lg line-through">{money(product.price)}</span>
+            ) : product.load_amount && <span className="text-gray-400 text-lg line-through">₱{product.load_amount}</span>}
             {discount > 0 && <span className="text-sm font-bold text-green-600">{discount}% OFF</span>}
           </div>
 
@@ -165,10 +186,22 @@ export default function ProductDetail({ productId }) {
           {/* Delivery details */}
           <div className="mt-6 space-y-4">
             {hasLoad && (
-              <div><label className="text-sm font-medium text-gray-700">Mobile Number (for load delivery)</label><Input value={mobileNumber} onChange={e => setMobileNumber(e.target.value)} placeholder="09XX XXX XXXX" className="mt-1" /></div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Mobile Number (for load delivery)</label>
+                  <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
+                </div>
+                <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
+              </div>
             )}
             {hasSim && (
-              <div><label className="text-sm font-medium text-gray-700">Delivery Address</label><Input value={address} onChange={e => setAddress(e.target.value)} placeholder="House #, Street, City" className="mt-1" /></div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Delivery Address</label>
+                  <button type="button" onClick={() => { setAddressEdited(true); setAddress(""); }} className="text-xs text-indigo-600 hover:underline">Use a different address</button>
+                </div>
+                <Input value={address} onChange={e => { setAddressEdited(true); setAddress(e.target.value); }} placeholder="House #, Street, City" className="mt-1" />
+              </div>
             )}
           </div>
 
@@ -201,17 +234,6 @@ export default function ProductDetail({ productId }) {
               </div>
             )}
           </div>
-
-          {/* Trust badges */}
-          <div className="mt-6 grid grid-cols-3 gap-3">
-            {TRUST_BADGES.map(badge => (
-              <div key={badge.title} className="flex flex-col items-center text-center p-3 bg-white rounded-xl border border-gray-100">
-                <span className="text-2xl mb-1">{badge.icon}</span>
-                <p className="text-xs font-medium text-gray-900">{badge.title}</p>
-                <p className="text-[10px] text-gray-400">{badge.desc}</p>
-              </div>
-            ))}
-          </div>
         </motion.div>
       </div>
 
@@ -234,7 +256,7 @@ export default function ProductDetail({ productId }) {
                   </div>
                   <div className="p-3">
                     <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
-                    <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(p.price)}</p>
+                    <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(getFinalPrice(p))}</p>
                   </div>
                 </div>
               </Link>

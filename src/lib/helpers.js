@@ -92,38 +92,36 @@ export function getProductReviewCount(product) {
 }
 
 export function getProductBadge(product) {
-  const h = hashId(String(product.id || product.name));
-  const badges = ["best_seller", "new", null, "best_seller", null, "new"];
-  return badges[h % badges.length];
+  return product.best_seller ? "best_seller" : null;
+}
+
+// Actual price to charge/display once a discount is applied. Only honors the
+// explicit `discount_percent` field set via the admin toggle — the
+// load_amount/original_price fallbacks in getDiscountPercent() are cosmetic
+// badge-only heuristics and must not silently change what's charged.
+export function getFinalPrice(product) {
+  const discount = Number(product.discount_percent) || 0;
+  if (discount > 0 && discount < 100) {
+    return Math.round(Number(product.price || 0) * (1 - discount / 100));
+  }
+  return Number(product.price || 0);
 }
 
 export function getDiscountPercent(product) {
+  if (product.discount_percent) return Number(product.discount_percent);
   if (product.load_amount && product.price > product.load_amount) {
     return Math.round((1 - product.load_amount / product.price) * 100);
   }
   if (product.original_price && product.price < product.original_price) {
     return Math.round((1 - product.price / product.original_price) * 100);
   }
-  const h = hashId(String(product.id || product.name));
-  const discounts = [0, 0, 15, 20, 25, 30, 40, 50];
-  return discounts[h % discounts.length];
-}
-
-export function getStockCount(product) {
-  const h = hashId(String(product.id || product.name));
-  return (h % 100) + 5;
+  return 0;
 }
 
 export const SHOP_CATEGORIES = [
   { id: "load", label: "E-Load", icon: "⚡" },
   { id: "sim", label: "SIM Cards", icon: "📱" },
   { id: "esim", label: "eSIM", icon: "📶" },
-];
-
-export const TRUST_BADGES = [
-  { icon: "🚚", title: "Free Shipping", desc: "Over ₱2,500" },
-  { icon: "🔒", title: "Secure Pay", desc: "GCash / COD" },
-  { icon: "↩️", title: "7-Day Returns", desc: "Easy returns" },
 ];
 
 export function formatOrderNumber(order, index) {
