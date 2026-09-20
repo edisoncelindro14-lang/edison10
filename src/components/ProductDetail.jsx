@@ -65,16 +65,19 @@ export default function ProductDetail({ productId }) {
     .filter(p => p.id !== product.id && (p.category === product.category || p.network === product.network))
     .slice(0, 4);
 
-  async function handleBuyNow() {
+  async function handleBuyNow(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
     if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
-    if (walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
+    if (paymentMethod === "wallet" && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
-      await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -(product.price * qty), description: details, status: "pending" });
-      toast.success("Order placed successfully! Admin will process it shortly.");
+      const isWallet = paymentMethod === "wallet";
+      const txType = isWallet ? "withdrawal" : "purchase";
+      const description = isWallet ? details : `${details} | Pay to Kabaro`;
+      await createRecord("transactions", { member_id: currentMember.id, type: txType, amount: -(product.price * qty), description, status: "pending" });
+      toast.success(isWallet ? "Order placed! Paid from wallet." : "Order placed! Please pay to Kabaro — admin will confirm.");
       nav("/Orders");
     } catch { toast.error("Failed to place order"); }
     setBuying(false);
@@ -187,15 +190,15 @@ export default function ProductDetail({ productId }) {
               <Link to="/MemberLogin" className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold flex items-center justify-center gap-2">
                 <Check className="w-5 h-5" /> Login to Purchase
               </Link>
-            ) : walletBalance < total ? (
-              <>
-                <p className="text-sm text-red-600 font-medium mb-3">⚠ Insufficient balance. <Link to="/Wallet" className="underline">Top up your wallet</Link> first.</p>
-                <Button disabled className="w-full bg-gray-300 text-gray-400 h-12 rounded-xl font-bold cursor-not-allowed">Buy Now</Button>
-              </>
             ) : (
-              <Button onClick={handleBuyNow} disabled={buying} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold">
-                {buying ? "Placing order..." : <><Check className="w-5 h-5 mr-2" /> Buy Now</>}
-              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Button onClick={() => handleBuyNow("kabaro")} disabled={buying} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white h-12 rounded-xl font-bold">
+                  {buying ? "Placing..." : <><ShoppingCart className="w-5 h-5 mr-2" /> Pay to Kabaro</>}
+                </Button>
+                <Button onClick={() => handleBuyNow("wallet")} disabled={buying || walletBalance < total} className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white h-12 rounded-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                  {buying ? "Placing..." : <><Check className="w-5 h-5 mr-2" /> Pay from Wallet</>}
+                </Button>
+              </div>
             )}
           </div>
 
