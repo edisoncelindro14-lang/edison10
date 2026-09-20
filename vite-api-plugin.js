@@ -41,6 +41,16 @@ export function apiMiddleware() {
             });
           }
 
+          // Add Express-like helpers to the raw Node.js ServerResponse
+          res.status = (code) => { res.statusCode = code; return res; };
+          res.json = (data) => {
+            if (!res.headersSent) {
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify(data));
+            }
+            return res;
+          };
+
           await mod.default(req, res);
         } catch (e) {
           console.error("[api-middleware] error:", e);
