@@ -261,6 +261,19 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         </div>
       )}
 
+      {/* Search bar above product gallery */}
+      <div className="mb-6">
+        <div className="relative max-w-2xl mx-auto">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search products, networks, categories..."
+            className="w-full h-12 pl-12 pr-4 rounded-full border border-gray-200 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all text-sm shadow-sm"
+          />
+        </div>
+      </div>
+
       {/* Featured Products */}
       {featured.length > 0 && (
         <section className="mb-10">
