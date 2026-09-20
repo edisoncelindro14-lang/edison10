@@ -15,7 +15,15 @@ Placeholder values in `.env.base44-defaults` let the landing page render before 
 
 ## Supabase backend setup (user does this in their own Supabase project)
 1. Run `supabase/migrations/001_initial_schema.sql` then `002_redeem_function.sql`.
-2. Deploy Edge Functions: `redeem-maintenance-code` (in repo), plus `member-login` and `register-member` (referenced by the UI but not included in the repo).
+2. Run `supabase/migrations/005_roles_and_product_images.sql` through `008_staff_role.sql` (adds the `staff` role to the DB constraint — required for the staff promotion system).
+3. Deploy Edge Functions: `redeem-maintenance-code` (in repo), plus `member-login` and `register-member` (referenced by the UI but not included in the repo).
+
+## Staff Promotion System
+- Admin/SuperAdmin can promote a user to the `staff` role via the Members tab role dropdown.
+- The admin panel has a **Staff** tab (admin/super_admin only) with a special **Top Up Staff** button that credits a staff account's wallet upon admin approval.
+- Staff members see a **Withdraw from Staff Account** section in the Wallet page; withdrawal requests create pending transactions that the admin approves in the Staff tab or the Orders tab.
+- Requires migration `008_staff_role.sql` to be run in Supabase before the `staff` role can be assigned.
+- Migration `008` also fixes the `is_admin()` RLS function to recognise `super_admin` (not just `admin`); without this fix, a super_admin cannot update any member's role because the RLS policy `admins manage members` calls `is_admin()` which previously only checked `role='admin'`.
 
 ## Verify
 `curl -sf -H "Host: external-preview.example.com" http://localhost:3000/` returns the landing page HTML.

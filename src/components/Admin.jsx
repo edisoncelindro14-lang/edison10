@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X, Plus,
-  Search, Download, Copy, Trash2, RotateCcw, UserCog, Upload, Crown, Store, Zap, Camera, Maximize2,
+  Search, Download, Copy, Trash2, RotateCcw, UserCog, Upload, Crown, Store, Zap, Camera, Maximize2, Briefcase,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, updateRecord, createRecord, deleteRecord } from "../lib/useData";
@@ -23,8 +23,10 @@ export default function Admin({ panelRole } = {}) {
   const [productImage, setProductImage] = useState(null);
   const [gcash, setGcash] = useState({ gcash_number: "", gcash_name: "" });
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [staffTopupMember, setStaffTopupMember] = useState(null);
+  const [staffTopupAmount, setStaffTopupAmount] = useState("");
 
-  const { data: members = [] } = useTable("members");
+  const { data: members = [], refetch: refetchMembers, updateLocalRecord: updateLocalMember } = useTable("members");
   const memberId = getSessionMemberId();
   const currentMember = memberId ? members.find(m => m.id === memberId) : null;
   const currentUserRole = panelRole || currentMember?.role;
@@ -46,6 +48,8 @@ export default function Admin({ panelRole } = {}) {
   const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
   const purchaseOrders = transactions.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const pendingTopups = topupReqs.filter(r => r.status === "pending").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const staffMembers = activeMembers.filter(m => m.role === "staff");
+  const pendingStaffWithdrawals = transactions.filter(t => t.type === "withdrawal" && t.status === "pending" && staffMembers.some(s => s.id === t.member_id)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const filteredMembers = activeMembers.filter(m => {
     if (!search) return true;
@@ -57,11 +61,13 @@ export default function Admin({ panelRole } = {}) {
   const showTopups = isSuperAdmin || isAdminRole || isReseller;
   const showMembers = isSuperAdmin || isAdminRole || isReseller;
   const showGcash = isSuperAdmin || isAdminRole;
+  const showStaff = isSuperAdmin || isAdminRole;
 
   const tabs = [
     ...(showOrders ? [{ id: "orders", label: `Orders${purchaseOrders.filter(o => o.status === "pending").length > 0 ? ` (${purchaseOrders.filter(o => o.status === "pending").length})` : ""}`, icon: ShoppingBag }] : []),
     ...(showTopups ? [{ id: "topups", label: `Top-ups${pendingTopups.length > 0 ? ` (${pendingTopups.length})` : ""}`, icon: Wallet }] : []),
     ...(showMembers ? [{ id: "members", label: `Members (${activeMembers.length})`, icon: Users }] : []),
+    ...(showStaff ? [{ id: "staff", label: `Staff${staffMembers.length > 0 ? ` (${staffMembers.length})` : ""}`, icon: Briefcase }] : []),
     { id: "products", label: "Products", icon: Store },
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
     { id: "joytel_screenshots", label: `JoyTel Screenshots${joytelScreenshots.length > 0 ? ` (${joytelScreenshots.length})` : ""}`, icon: Camera },
@@ -114,6 +120,53 @@ export default function Admin({ panelRole } = {}) {
     }
   }
 
+  async function approveStaffTopup() {
+    const amount = parseFloat(staffTopupAmount);
+    if (!amount || amount < 1) { toast.error("Enter at least ₱1"); return; }
+
+    const gcashNum = staffTopupMember?.gcash_number;
+    const gcashName = staffTopupMember?.gcash_name || staffTopupMember?.full_name;
+    if (!gcashNum) {
+      toast.error("Staff member has no GCash number. Ask them to set it in their Profile.");
+      return;
+    }
+
+    const btn = document.getElementById("approve-staff-topup");
+    if (btn) { btn.disabled = true; btn.textContent = "Sending to PayMongo..."; }
+
+    try {
+      const payoutRes = await fetch("/api/paymongo/payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          gcash_number: gcashNum,
+          gcash_name: gcashName,
+          member_id: staffTopupMember.id,
+        }),
+      });
+      const payoutData = await payoutRes.json();
+      if (!payoutRes.ok) throw new Error(payoutData.error || "PayMongo payout failed");
+
+      const refNum = payoutData.reference_number || generateRefNumber();
+      const processedBy = currentMember?.username || "unknown";
+      const newTx = await createRecord("transactions", {
+        member_id: staffTopupMember.id,
+        type: "adjustment",
+        amount,
+        description: `Staff account top-up approved | PayMongo Ref: ${refNum} | By: @${processedBy}`,
+        status: "completed",
+      });
+      addLocalTx(newTx);
+      toast.success(`Staff account topped up with ${money(amount)} | PayMongo Ref: ${refNum}`);
+      setStaffTopupMember(null);
+      setStaffTopupAmount("");
+    } catch (err) {
+      toast.error("Failed to top up staff account: " + (err?.message || "Unknown error"));
+      if (btn) { btn.disabled = false; btn.textContent = "Approve & Credit Wallet"; }
+    }
+  }
+
   function parseAdminNote(note) {
     try { return note ? JSON.parse(note) : {}; } catch { return {}; }
   }
@@ -147,9 +200,15 @@ export default function Admin({ panelRole } = {}) {
   }
 
   async function changeRole(id, role) {
-    const labels = { super_admin: "SuperAdmin", admin: "Admin", reseller: "Reseller", member: "User" };
-    try { await updateRecord("members", id, { role }); toast.success(`Role set to ${labels[role]}`); window.location.reload(); }
-    catch { toast.error("Failed to update role"); }
+    const labels = { super_admin: "SuperAdmin", admin: "Admin", reseller: "Reseller", member: "User", staff: "Staff" };
+    try {
+      await updateRecord("members", id, { role });
+      updateLocalMember(id, { role });
+      toast.success(`Role set to ${labels[role]}`);
+    } catch (err) {
+      console.error("Role update failed:", err);
+      toast.error("Failed to update role: " + (err?.message || "Unknown error"));
+    }
   }
 
   async function uploadProductImage(file) {
@@ -396,7 +455,7 @@ export default function Admin({ panelRole } = {}) {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{m.full_name}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">@{m.username}</td>
                       <td className="px-4 py-3">
-                        <Badge className={m.role === "super_admin" ? "bg-purple-100 text-purple-700" : m.role === "admin" ? "bg-blue-100 text-blue-700" : m.role === "reseller" ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-600"}>
+                        <Badge className={m.role === "super_admin" ? "bg-purple-100 text-purple-700" : m.role === "admin" ? "bg-blue-100 text-blue-700" : m.role === "reseller" ? "bg-teal-100 text-teal-700" : m.role === "staff" ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-600"}>
                           {m.role === "super_admin" && <Crown className="w-3 h-3 inline mr-1" />}
                           <span className="capitalize">{m.role}</span>
                         </Badge>
@@ -412,6 +471,7 @@ export default function Admin({ panelRole } = {}) {
                               className="appearance-none bg-[#F5F5F5] border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-xs font-medium text-gray-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-w-[120px]"
                             >
                               {(isSuperAdmin || isAdminRole) && <option value="admin">Admin</option>}
+                              {(isSuperAdmin || isAdminRole) && <option value="staff">Staff</option>}
                               <option value="reseller">Reseller</option>
                               <option value="member">User</option>
                             </select>
@@ -432,6 +492,150 @@ export default function Admin({ panelRole } = {}) {
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Staff Tab */}
+      {tab === "staff" && (
+        <div className="space-y-6">
+          {staffMembers.length === 0 ? (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-12 text-center">
+              <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-400">No staff accounts yet</p>
+              <p className="text-gray-400 text-sm mt-1">Promote a member to the Staff role from the Members tab to get started.</p>
+            </div>
+          ) : (
+            <>
+              {/* Staff accounts with top-up button */}
+              <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Briefcase className="w-5 h-5 text-indigo-500" /> Staff Accounts</h2>
+                  <p className="text-sm text-gray-500 mt-1">Use the special Top Up button to credit a staff account. The admin approves the amount before the wallet is credited.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead><tr className="border-b border-gray-100">
+                      {["Name", "Username", "Balance", "Actions"].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {staffMembers.map(m => {
+                        const memberTx = transactions.filter(t => t.member_id === m.id && t.status === "completed");
+                        const balance = memberTx.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                        return (
+                          <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{m.full_name}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">@{m.username}</td>
+                            <td className="px-6 py-4 text-sm font-bold text-gray-900">{money(balance)}</td>
+                            <td className="px-6 py-4">
+                              <button
+                                onClick={() => { setStaffTopupMember(m); setStaffTopupAmount(""); }}
+                                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 font-medium text-xs flex items-center gap-1.5"
+                              >
+                                <Wallet className="w-4 h-4" /> Top Up Staff
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pending staff withdrawals */}
+              {pendingStaffWithdrawals.length > 0 && (
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wallet className="w-5 h-5 text-amber-500" /> Pending Staff Withdrawals ({pendingStaffWithdrawals.length})</h2>
+                    <p className="text-sm text-gray-500 mt-1">Approve or reject withdrawal requests from staff accounts. Approved withdrawals are also visible in the Orders tab.</p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead><tr className="border-b border-gray-100">
+                        {["Staff Member", "Amount", "Date", "Actions"].map(h => <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {pendingStaffWithdrawals.map(w => {
+                          const member = staffMembers.find(s => s.id === w.member_id);
+                          return (
+                            <tr key={w.id} className="border-b border-gray-50 hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm font-medium text-gray-900">{member?.full_name || "—"} <span className="text-gray-400 text-xs">@{member?.username || ""}</span></td>
+                              <td className="px-6 py-4 text-sm font-bold text-gray-900">{money(Math.abs(w.amount))}</td>
+                              <td className="px-6 py-4 text-sm text-gray-400">{formatDate(w.created_at || w.created_date, "MMM d, yyyy")}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex gap-3">
+                                  <button onClick={async () => {
+                                    const staffMember = staffMembers.find(s => s.id === w.member_id);
+                                    const gcashNum = staffMember?.gcash_number;
+                                    const gcashName = staffMember?.gcash_name || staffMember?.full_name;
+                                    if (!gcashNum) { toast.error("Staff member has no GCash number. Ask them to set it in their Profile."); return; }
+                                    const btn = document.getElementById(`approve-wd-${w.id}`);
+                                    if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+                                    try {
+                                      const payoutRes = await fetch("/api/paymongo/payout", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          amount: Math.abs(w.amount),
+                                          gcash_number: gcashNum,
+                                          gcash_name: gcashName,
+                                          transaction_id: w.id,
+                                          member_id: w.member_id,
+                                        }),
+                                      });
+                                      const payoutData = await payoutRes.json();
+                                      if (!payoutRes.ok) throw new Error(payoutData.error || "Payout failed");
+                                      updateLocalTx(w.id, { status: payoutData.status === "succeeded" ? "completed" : "pending", description: `Staff withdrawal payout to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}` });
+                                      toast.success(`Payout sent to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}`);
+                                    } catch (err) {
+                                      toast.error("Payout failed: " + (err?.message || "Unknown error"));
+                                      if (btn) { btn.disabled = false; btn.textContent = "Approve"; }
+                                    }
+                                  }} id={`approve-wd-${w.id}`} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium text-xs flex items-center gap-1"><Check className="w-4 h-4" /> Approve</button>
+                                  <button onClick={async () => { try { await updateRecord("transactions", w.id, { status: "cancelled" }); updateLocalTx(w.id, { status: "cancelled" }); toast.success("Withdrawal rejected"); } catch { toast.error("Failed to reject"); } }} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium text-xs flex items-center gap-1"><X className="w-4 h-4" /> Reject</button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Staff Top-up Modal */}
+      {staffTopupMember && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={() => setStaffTopupMember(null)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
+                <Briefcase className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Top Up Staff Account</h3>
+                <p className="text-sm text-gray-500">{staffTopupMember.full_name} · @{staffTopupMember.username}</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <Label>Top-up Amount (₱)</Label>
+                <Input type="number" value={staffTopupAmount} onChange={e => setStaffTopupAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
+              </div>
+              <div className="flex gap-3">
+                <Button id="approve-staff-topup" onClick={approveStaffTopup} className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                  <Check className="w-4 h-4 mr-2" /> Approve & Credit Wallet
+                </Button>
+                <Button onClick={() => setStaffTopupMember(null)} variant="outline" className="border-gray-200">Cancel</Button>
+              </div>
+              <p className="text-xs text-gray-400">The staff member's wallet will be credited immediately upon approval.</p>
+            </div>
+          </motion.div>
         </div>
       )}
 
@@ -645,16 +849,50 @@ export default function Admin({ panelRole } = {}) {
 
       {/* Settings Tab */}
       {tab === "settings" && (
-        <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> System Information</h2>
-          <div className="space-y-3 text-sm text-gray-600">
-            <p><strong>Total Members:</strong> {activeMembers.length}</p>
-            <p><strong>Approved Members:</strong> {approvedMembers.length}</p>
-            <p><strong>Pending Members:</strong> {pendingMembers.length}</p>
-            <p><strong>Total Products:</strong> {allProducts.length}</p>
-            <p><strong>Total Orders:</strong> {purchaseOrders.length}</p>
-            <p><strong>Pending Top-ups:</strong> {pendingTopups.length}</p>
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> System Information</h2>
+            <div className="space-y-3 text-sm text-gray-600">
+              <p><strong>Total Members:</strong> {activeMembers.length}</p>
+              <p><strong>Approved Members:</strong> {approvedMembers.length}</p>
+              <p><strong>Pending Members:</strong> {pendingMembers.length}</p>
+              <p><strong>Total Products:</strong> {allProducts.length}</p>
+              <p><strong>Total Orders:</strong> {purchaseOrders.length}</p>
+              <p><strong>Pending Top-ups:</strong> {pendingTopups.length}</p>
+            </div>
           </div>
+
+          {isSuperAdmin && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-blue-500" /> GCash Button Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Show GCash Payment Button</p>
+                  <p className="text-sm text-gray-500">Toggle the floating GCash payment button visible to all users.</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const existing = allSettings.find(s => s.setting_key === "gcash_button_visible");
+                    const newValue = existing?.setting_value === "true" ? "false" : "true";
+                    try {
+                      if (existing) {
+                        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+                      } else {
+                        await createRecord("system_settings", { setting_key: "gcash_button_visible", setting_value: newValue });
+                      }
+                      toast.success(newValue === "true" ? "GCash button is now visible" : "GCash button is now hidden");
+                      window.location.reload();
+                    } catch (err) {
+                      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+                    }
+                  }}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

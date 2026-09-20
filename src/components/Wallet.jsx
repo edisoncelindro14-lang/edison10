@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Wallet as WalletIcon, ArrowRight, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { Wallet as WalletIcon, ArrowRight, TrendingUp, TrendingDown, Plus, Briefcase } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, useCurrentMember } from "../lib/useData";
+import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, formatDate, TRANSACTION_TYPES } from "../lib/helpers";
 import { Button, Input, Badge } from "./ui";
 
@@ -11,6 +11,7 @@ const TOPUP_AMOUNTS = [50, 100, 200, 300, 500, 1000];
 
 export default function Wallet() {
   const [topupAmount, setTopupAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const { data: members = [] } = useTable("members");
@@ -36,6 +37,8 @@ export default function Wallet() {
   const myTx = transactions.filter(t => t.member_id === currentMember.id);
   const walletBalance = myTx.filter(t => t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const totalSpent = myTx.filter(t => (t.type === "withdrawal" || t.type === "purchase") && t.status === "completed").reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
+  const isStaff = currentMember.role === "staff";
+  const myWithdrawals = myTx.filter(t => t.type === "withdrawal" && t.status === "pending").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const myTopupReqs = topupReqs.filter(r => r.member_id === currentMember.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   async function handleTopup() {
@@ -55,6 +58,27 @@ export default function Wallet() {
       toast.error(err.message || "Failed to start PayMongo payment");
       setSubmitting(false);
     }
+  }
+
+  async function handleWithdraw() {
+    const amount = parseFloat(withdrawAmount);
+    if (!amount || amount < 1) { toast.error("Enter at least ₱1"); return; }
+    if (amount > walletBalance) { toast.error("Insufficient balance"); return; }
+    setSubmitting(true);
+    try {
+      await createRecord("transactions", {
+        member_id: currentMember.id,
+        type: "withdrawal",
+        amount: -amount,
+        description: "Staff withdrawal request",
+        status: "pending",
+      });
+      toast.success("Withdrawal request submitted — awaiting admin approval");
+      setWithdrawAmount("");
+    } catch (err) {
+      toast.error("Failed to request withdrawal: " + (err?.message || "Unknown error"));
+    }
+    setSubmitting(false);
   }
 
   return (
@@ -111,6 +135,47 @@ export default function Wallet() {
         </div>
         <p className="text-sm text-gray-500 mt-3">You'll be redirected to PayMongo to complete payment via GCash, Maya, or card. Your wallet is credited automatically once payment is confirmed.</p>
       </motion.div>
+
+      {/* Staff withdrawal section */}
+      {isStaff && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-8">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Briefcase className="w-5 h-5 text-indigo-500" /> Withdraw from Staff Account</h2>
+          <p className="text-sm text-gray-500 mb-4">Submit a withdrawal request. An admin will review and approve it — funds are sent directly to your GCash account via PayMongo.</p>
+          {currentMember.gcash_number ? (
+            <div className="mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-sm">
+              <p className="text-gray-600">Payout to: <span className="font-bold text-gray-900">{currentMember.gcash_number}</span> ({currentMember.gcash_name || currentMember.full_name})</p>
+              <Link to="/Profile" className="text-indigo-600 hover:underline text-xs">Update GCash details</Link>
+            </div>
+          ) : (
+            <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-100 text-sm">
+              <p className="text-amber-800">No GCash number set. <Link to="/Profile" className="font-bold underline">Add your GCash details</Link> in your Profile to receive payouts.</p>
+            </div>
+          )}
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium text-gray-700">Withdrawal Amount (₱)</label>
+              <Input type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
+            </div>
+            <Button onClick={handleWithdraw} disabled={submitting} className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white h-12 px-8">
+              {submitting ? "Submitting..." : "Request Withdrawal"}
+            </Button>
+          </div>
+          {myWithdrawals.length > 0 && (
+            <div className="mt-6 space-y-2">
+              <p className="text-sm font-medium text-gray-700">Pending Withdrawal Requests</p>
+              {myWithdrawals.map(w => (
+                <div key={w.id} className="flex items-center justify-between bg-amber-50 rounded-xl p-3 border border-amber-100">
+                  <div>
+                    <p className="font-medium text-gray-900">{money(Math.abs(w.amount))}</p>
+                    <p className="text-xs text-gray-400">{formatDate(w.created_at || w.created_date)}</p>
+                  </div>
+                  <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* Top-up history */}
       {myTopupReqs.length > 0 && (

@@ -20,6 +20,8 @@ export default function Profile() {
         email: currentMember.email || "",
         phone: currentMember.phone || "",
         address: currentMember.address || "",
+        gcash_number: currentMember.gcash_number || "",
+        gcash_name: currentMember.gcash_name || "",
       });
       setInitialized(true);
     }
@@ -56,6 +58,11 @@ export default function Profile() {
     { key: "email", label: "Email", type: "email" },
     { key: "phone", label: "Phone" },
     { key: "address", label: "Address" },
+  ];
+
+  const gcashFields = [
+    { key: "gcash_number", label: "GCash Number", placeholder: "09XX XXX XXXX" },
+    { key: "gcash_name", label: "GCash Account Name", placeholder: "Registered name" },
   ];
 
   return (
@@ -98,6 +105,20 @@ export default function Profile() {
             <div key={f.key}>
               <Label>{f.label}</Label>
               <Input value={form[f.key]} onChange={update(f.key)} type={f.type || "text"} />
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">GCash Payout Details</h2>
+        <p className="text-sm text-gray-500 mb-4">Required for staff withdrawals — payouts are sent directly to this GCash account.</p>
+        <div className="space-y-4">
+          {gcashFields.map(f => (
+            <div key={f.key}>
+              <Label>{f.label}</Label>
+              <Input value={form[f.key]} onChange={update(f.key)} placeholder={f.placeholder || ""} />
             </div>
           ))}
         </div>

@@ -21,6 +21,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Root info route
+  if (req.url === '/' || req.url === '') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', service: 'joytel-proxy', routes: ['/warehouse/*', '/rsp/*', '/health'] }));
+    return;
+  }
+
   // Health check
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -110,14 +117,6 @@ const server = http.createServer((req, res) => {
     }
     proxyReq.end();
   });
-});
-
-// Root info route
-  if (req.url === '/' || req.url === '') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', service: 'joytel-proxy', routes: ['/warehouse/*', '/rsp/*', '/health'] }));
-    return;
-  }
 });
 
 server.listen(PORT, '0.0.0.0', () => {
