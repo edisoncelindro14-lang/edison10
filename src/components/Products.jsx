@@ -67,8 +67,8 @@ export default function Products() {
     if (filterNetwork !== "all" && p.network !== filterNetwork) return false;
     if (filterCategory !== "all" && p.category !== filterCategory) return false;
     if (search) {
-      const q = search;
-      if (!p.name.includes(q) && !p.network?.includes(q)) return false;
+      const q = search.toLowerCase();
+      if (!p.name.toLowerCase().includes(q) && !p.network?.toLowerCase().includes(q)) return false;
     }
     return true;
   });
