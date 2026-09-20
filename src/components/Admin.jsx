@@ -533,7 +533,34 @@ export default function Admin({ panelRole } = {}) {
                               <td className="px-6 py-4 text-sm text-gray-400">{formatDate(w.created_at || w.created_date, "MMM d, yyyy")}</td>
                               <td className="px-6 py-4">
                                 <div className="flex gap-3">
-                                  <button onClick={async () => { try { await updateRecord("transactions", w.id, { status: "completed" }); updateLocalTx(w.id, { status: "completed" }); toast.success("Withdrawal approved"); } catch { toast.error("Failed to approve"); } }} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium text-xs flex items-center gap-1"><Check className="w-4 h-4" /> Approve</button>
+                                  <button onClick={async () => {
+                                    const staffMember = staffMembers.find(s => s.id === w.member_id);
+                                    const gcashNum = staffMember?.gcash_number;
+                                    const gcashName = staffMember?.gcash_name || staffMember?.full_name;
+                                    if (!gcashNum) { toast.error("Staff member has no GCash number. Ask them to set it in their Profile."); return; }
+                                    const btn = document.getElementById(`approve-wd-${w.id}`);
+                                    if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+                                    try {
+                                      const payoutRes = await fetch("/api/paymongo/payout", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          amount: Math.abs(w.amount),
+                                          gcash_number: gcashNum,
+                                          gcash_name: gcashName,
+                                          transaction_id: w.id,
+                                          member_id: w.member_id,
+                                        }),
+                                      });
+                                      const payoutData = await payoutRes.json();
+                                      if (!payoutRes.ok) throw new Error(payoutData.error || "Payout failed");
+                                      updateLocalTx(w.id, { status: payoutData.status === "succeeded" ? "completed" : "pending", description: `Staff withdrawal payout to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}` });
+                                      toast.success(`Payout sent to GCash ${gcashNum} | Ref: ${payoutData.reference_number || "N/A"}`);
+                                    } catch (err) {
+                                      toast.error("Payout failed: " + (err?.message || "Unknown error"));
+                                      if (btn) { btn.disabled = false; btn.textContent = "Approve"; }
+                                    }
+                                  }} id={`approve-wd-${w.id}`} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium text-xs flex items-center gap-1"><Check className="w-4 h-4" /> Approve</button>
                                   <button onClick={async () => { try { await updateRecord("transactions", w.id, { status: "cancelled" }); updateLocalTx(w.id, { status: "cancelled" }); toast.success("Withdrawal rejected"); } catch { toast.error("Failed to reject"); } }} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium text-xs flex items-center gap-1"><X className="w-4 h-4" /> Reject</button>
                                 </div>
                               </td>

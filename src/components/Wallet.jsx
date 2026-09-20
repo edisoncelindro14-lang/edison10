@@ -140,7 +140,17 @@ export default function Wallet() {
       {isStaff && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-8">
           <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Briefcase className="w-5 h-5 text-indigo-500" /> Withdraw from Staff Account</h2>
-          <p className="text-sm text-gray-500 mb-4">Submit a withdrawal request. An admin will review and approve it before the funds are released.</p>
+          <p className="text-sm text-gray-500 mb-4">Submit a withdrawal request. An admin will review and approve it — funds are sent directly to your GCash account via PayMongo.</p>
+          {currentMember.gcash_number ? (
+            <div className="mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-sm">
+              <p className="text-gray-600">Payout to: <span className="font-bold text-gray-900">{currentMember.gcash_number}</span> ({currentMember.gcash_name || currentMember.full_name})</p>
+              <Link to="/Profile" className="text-indigo-600 hover:underline text-xs">Update GCash details</Link>
+            </div>
+          ) : (
+            <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-100 text-sm">
+              <p className="text-amber-800">No GCash number set. <Link to="/Profile" className="font-bold underline">Add your GCash details</Link> in your Profile to receive payouts.</p>
+            </div>
+          )}
           <div className="flex gap-3 items-end">
             <div className="flex-1">
               <label className="text-sm font-medium text-gray-700">Withdrawal Amount (₱)</label>
