@@ -818,16 +818,50 @@ export default function Admin({ panelRole } = {}) {
 
       {/* Settings Tab */}
       {tab === "settings" && (
-        <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> System Information</h2>
-          <div className="space-y-3 text-sm text-gray-600">
-            <p><strong>Total Members:</strong> {activeMembers.length}</p>
-            <p><strong>Approved Members:</strong> {approvedMembers.length}</p>
-            <p><strong>Pending Members:</strong> {pendingMembers.length}</p>
-            <p><strong>Total Products:</strong> {allProducts.length}</p>
-            <p><strong>Total Orders:</strong> {purchaseOrders.length}</p>
-            <p><strong>Pending Top-ups:</strong> {pendingTopups.length}</p>
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Settings className="w-5 h-5 text-gray-500" /> System Information</h2>
+            <div className="space-y-3 text-sm text-gray-600">
+              <p><strong>Total Members:</strong> {activeMembers.length}</p>
+              <p><strong>Approved Members:</strong> {approvedMembers.length}</p>
+              <p><strong>Pending Members:</strong> {pendingMembers.length}</p>
+              <p><strong>Total Products:</strong> {allProducts.length}</p>
+              <p><strong>Total Orders:</strong> {purchaseOrders.length}</p>
+              <p><strong>Pending Top-ups:</strong> {pendingTopups.length}</p>
+            </div>
           </div>
+
+          {isSuperAdmin && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-blue-500" /> GCash Button Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Show GCash Payment Button</p>
+                  <p className="text-sm text-gray-500">Toggle the floating GCash payment button visible to all users.</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const existing = allSettings.find(s => s.setting_key === "gcash_button_visible");
+                    const newValue = existing?.setting_value === "true" ? "false" : "true";
+                    try {
+                      if (existing) {
+                        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+                      } else {
+                        await createRecord("system_settings", { setting_key: "gcash_button_visible", setting_value: newValue });
+                      }
+                      toast.success(newValue === "true" ? "GCash button is now visible" : "GCash button is now hidden");
+                      window.location.reload();
+                    } catch (err) {
+                      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+                    }
+                  }}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
