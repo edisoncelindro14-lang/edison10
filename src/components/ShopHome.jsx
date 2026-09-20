@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon } from "lucide-react";
@@ -103,9 +103,9 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
   );
 }
 
-export default function ShopHome({ readOnly = false }) {
+export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const nav = useNavigate();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(headerSearch);
   const [filterCategory, setFilterCategory] = useState("all");
   const [cart, setCart] = useState([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -116,6 +116,9 @@ export default function ShopHome({ readOnly = false }) {
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [sortVersion, setSortVersion] = useState(0);
+
+  // Sync header search (from PublicShop) with internal search state
+  useEffect(() => { setSearch(headerSearch); }, [headerSearch]);
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
@@ -142,7 +145,7 @@ export default function ShopHome({ readOnly = false }) {
     if (filterCategory !== "all" && p.category !== filterCategory) return false;
     if (search) {
       const q = search.toLowerCase();
-      if (!p.name.toLowerCase().includes(q) && !p.network?.toLowerCase().includes(q)) return false;
+      if (!p.name.toLowerCase().includes(q) && !p.description?.toLowerCase().includes(q) && !p.network?.toLowerCase().includes(q)) return false;
     }
     return true;
   });
