@@ -10,7 +10,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-const PROXY_BASE = process.env.JOYTEL_PROXY_URL || 'https://8000-6a9f6514819dc31adf1bfd4a--b-96e91f0-840f693635c5ca26.imported.base44-preview.app';
+const PROXY_BASE = process.env.JOYTEL_PROXY_URL;
 const PROXY_TOKEN = process.env.JOYTEL_PROXY_TOKEN || 'kabaroload-proxy-2024';
 const RSP_PATH = '/rsp';
 

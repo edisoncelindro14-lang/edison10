@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
 // Route through the sandbox proxy (IP whitelisted by JoyTel)
-const PROXY_BASE = process.env.JOYTEL_PROXY_URL || 'https://8000-6a9f6514819dc31adf1bfd4a--b-96e91f0-840f693635c5ca26.imported.base44-preview.app';
+const PROXY_BASE = process.env.JOYTEL_PROXY_URL;
 const PROXY_TOKEN = process.env.JOYTEL_PROXY_TOKEN || 'kabaroload-proxy-2024';
 const RSP_PATH = '/rsp';
 
