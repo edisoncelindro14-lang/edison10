@@ -15,6 +15,8 @@ services:
   web:
     image: node:22
     working_dir: /app
+    depends_on:
+      - joytel-proxy
     volumes:
       - ./:/app
       - /app/node_modules
@@ -22,6 +24,8 @@ services:
       - "3000:5173"
     environment:
       - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+      - JOYTEL_PROXY_URL=https://8000-${BASE44_PUBLIC_HOST_SUFFIX}
+      - JOYTEL_PROXY_TOKEN=kabaroload-proxy-2024
     env_file:
       - ./.env.base44-defaults
       - /run/base44/app.env
