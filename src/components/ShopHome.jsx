@@ -126,8 +126,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   // Sync header search (from PublicShop) with internal search state
   useEffect(() => { setSearch(headerSearch); }, [headerSearch]);
 
-  const { data: members = [] } = useTable("members");
-  const { data: transactions = [] } = useTable("transactions");
+  const { data: members = [] } = useTable("members", { enabled: !readOnly });
+  const { data: transactions = [] } = useTable("transactions", { enabled: !readOnly });
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
