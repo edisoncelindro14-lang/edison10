@@ -2,8 +2,8 @@ import React, { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { X, Upload, Loader2, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { supabase } from "../lib/supabase";
 import { updateRecord, createRecord, deleteRecord } from "../lib/useData";
+import { uploadToCloudinary } from "../lib/cloudinary";
 import { NETWORKS, NETWORK_COLORS } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
 
@@ -43,18 +43,7 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
 
   async function uploadImage(file) {
     if (!file) return form.image_url;
-    const fileName = `product_${Date.now()}_${file.name}`;
-    const { error } = await supabase.storage.from("products").upload(fileName, file);
-    if (error) {
-      // Fallback to data URL
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      });
-    }
-    const { data } = supabase.storage.from("products").getPublicUrl(fileName);
-    return data?.publicUrl || null;
+    return await uploadToCloudinary(file, "products");
   }
 
   async function handleSave() {

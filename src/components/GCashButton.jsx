@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { useTable } from "../lib/useData";
 import { getSessionMemberId } from "../lib/auth";
 import { supabase } from "../lib/supabase";
+import { uploadToCloudinary } from "../lib/cloudinary";
 
 export function GCashButton() {
   const [open, setOpen] = useState(false);
@@ -29,14 +30,7 @@ export function GCashButton() {
     if (!file) return;
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const fileName = `receipts/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("receipts").upload(fileName, file);
-      let receiptUrl = fileName;
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(fileName);
-        receiptUrl = urlData.publicUrl;
-      }
+      const receiptUrl = await uploadToCloudinary(file, "receipts");
       const memberName = "";
       await supabase.from("gcash_receipts").insert({
         member_id: memberId,
