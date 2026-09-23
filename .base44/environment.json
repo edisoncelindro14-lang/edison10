@@ -44,6 +44,18 @@
       "description": "PayMongo payment API secret key",
       "requiredAtBoot": false,
       "generatedForDevelopment": true
+    },
+    {
+      "name": "VITE_CLOUDINARY_CLOUD_NAME",
+      "description": "Cloudinary cloud name (find in your Cloudinary dashboard → Settings → Cloud name)",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "VITE_CLOUDINARY_UPLOAD_PRESET",
+      "description": "Cloudinary unsigned upload preset (create in Cloudinary dashboard → Settings → Upload → Upload presets, set mode to Unsigned)",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
     }
   ]
 }
