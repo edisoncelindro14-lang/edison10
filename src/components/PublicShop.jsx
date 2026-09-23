@@ -3,14 +3,13 @@ import { Link } from "react-router-dom";
 import { Search, ShoppingCart, User } from "lucide-react";
 import ShopHome from "./ShopHome";
 import Products from "./Products";
-import { useCurrentMember, useTable } from "../lib/useData";
+import { getSessionMemberId } from "../lib/auth";
 
 const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
 
 export default function PublicShop({ children }) {
   const [search, setSearch] = useState("");
-  const { data: members = [] } = useTable("members");
-  const { currentMember } = useCurrentMember(members);
+  const isLoggedIn = !!getSessionMemberId();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -34,7 +33,7 @@ export default function PublicShop({ children }) {
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
-            {currentMember ? (
+            {isLoggedIn ? (
               <Link to="/Dashboard" className="flex items-center gap-1.5 text-gray-700 hover:text-indigo-600 font-medium text-sm">
                 <User className="w-4 h-4" /> Account
               </Link>

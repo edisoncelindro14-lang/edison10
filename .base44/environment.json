@@ -1,0 +1,49 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "VITE_SUPABASE_URL",
+      "description": "Supabase project URL (find in your Supabase dashboard > Project Settings > API, or in .env.production)",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "VITE_SUPABASE_ANON_KEY",
+      "description": "Supabase anon/publishable key (find in your Supabase dashboard > Project Settings > API, or in .env.production)",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "JOYTEL_APP_ID",
+      "description": "Joytel API app ID",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "JOYTEL_APP_SECRET",
+      "description": "Joytel API app secret",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "JOYTEL_CUSTOMER_AUTH",
+      "description": "Joytel customer auth token",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "JOYTEL_CUSTOMER_CODE",
+      "description": "Joytel customer code",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "PAYMONGO_SECRET_KEY",
+      "description": "PayMongo payment API secret key",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": true
+    }
+  ]
+}
