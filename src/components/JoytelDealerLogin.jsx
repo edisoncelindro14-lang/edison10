@@ -5,6 +5,7 @@ import { Button } from "./ui";
 import { supabase } from "../lib/supabase";
 import { getSessionMemberId } from "../lib/auth";
 import { useTable } from "../lib/useData";
+import { uploadToCloudinary } from "../lib/cloudinary";
 import toast from "react-hot-toast";
 
 const JOYTEL_PORTAL_URL = "https://www.joytelshop.com/#/login/pwd-login?redirect=/dashboard/workbench";
@@ -19,12 +20,12 @@ export default function JoytelDealerLogin() {
   const memberId = getSessionMemberId();
   const currentMember = memberId ? members.find(m => m.id === memberId) : null;
 
-  async function saveScreenshot(dataUrl) {
+  async function saveScreenshot(imageUrl) {
     const ts = Date.now();
     const { error } = await supabase.from("system_settings").insert({
       setting_key: `joytel_screenshot_${ts}`,
       setting_value: JSON.stringify({
-        image: dataUrl,
+        image: imageUrl,
         captured_by: currentMember?.username || "admin",
         title: `JoyTel Portal — ${new Date().toLocaleString()}`,
       }),
@@ -73,7 +74,7 @@ export default function JoytelDealerLogin() {
       const iframe = iframeRef.current;
       const rect = iframe ? iframe.getBoundingClientRect() : null;
 
-      let dataUrl;
+      let finalCanvas;
       if (rect && rect.width > 0 && rect.height > 0) {
         // Scale factor: video pixels per CSS pixel
         const scaleX = fullCanvas.width / window.innerWidth;
@@ -98,15 +99,20 @@ export default function JoytelDealerLogin() {
           resized.width = maxW;
           resized.height = cropCanvas.height * scale;
           resized.getContext("2d").drawImage(cropCanvas, 0, 0, maxW, resized.height);
-          dataUrl = resized.toDataURL("image/jpeg", 0.8);
+          finalCanvas = resized;
         } else {
-          dataUrl = cropCanvas.toDataURL("image/jpeg", 0.8);
+          finalCanvas = cropCanvas;
         }
       } else {
-        dataUrl = fullCanvas.toDataURL("image/jpeg", 0.8);
+        finalCanvas = fullCanvas;
       }
 
-      await saveScreenshot(dataUrl);
+      const blob = await new Promise((resolve) =>
+        finalCanvas.toBlob(resolve, "image/jpeg", 0.8)
+      );
+      if (!blob) throw new Error("Failed to create screenshot image");
+      const imageUrl = await uploadToCloudinary(blob, "joytel-screenshots");
+      await saveScreenshot(imageUrl);
       toast.success("Screenshot saved to Admin & Reseller panels!");
     } catch (err) {
       if (err.name === "NotAllowedError") {
@@ -126,13 +132,8 @@ export default function JoytelDealerLogin() {
     if (!file) return;
     setUploading(true);
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      await saveScreenshot(dataUrl);
+      const imageUrl = await uploadToCloudinary(file, "joytel-screenshots");
+      await saveScreenshot(imageUrl);
       toast.success("Screenshot uploaded & saved!");
     } catch (err) {
       console.error("Upload error:", err);
