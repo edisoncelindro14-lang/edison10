@@ -32,7 +32,7 @@ function PageRouter() {
   const location = useLocation();
   const path = location.pathname.replace(/^\//, "").split("/")[0];
   const loggedIn = !!getSessionMemberId();
-  const { data: members = [] } = useTable("members");
+  const { data: members = [] } = useTable("members", { enabled: loggedIn });
   const currentMemberId = getSessionMemberId();
   const currentMember = members.find(m => m.id === currentMemberId);
   const memberRole = currentMember?.role;

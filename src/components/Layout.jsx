@@ -33,8 +33,9 @@ export default function Layout({ children, currentPageName }) {
   const nav = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { data: members = [] } = useTable("members");
-  const { data: allSettings = [] } = useTable("system_settings");
+  const isAuthPage = currentPageName === "Register" || currentPageName === "MemberLogin";
+  const { data: members = [] } = useTable("members", { enabled: !isAuthPage });
+  const { data: allSettings = [] } = useTable("system_settings", { enabled: !isAuthPage });
   const memberId = getSessionMemberId();
   const member = memberId ? members.find(m => m.id === memberId) : null;
   const gcashButtonVisible = allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false";

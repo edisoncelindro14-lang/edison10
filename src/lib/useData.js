@@ -5,7 +5,7 @@ import { getSessionMemberId } from "./auth";
 
 // Generic data fetcher hook (replaces React Query for simplicity)
 export function useTable(tableName, options = {}) {
-  const { filter = null, order = null, limit = null, enabled = true } = options;
+  const { filter = null, order = null, limit = null, enabled = true, realtime = false } = options;
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(enabled);
 
@@ -41,22 +41,15 @@ export function useTable(tableName, options = {}) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Refetch on window focus so users always see fresh data (e.g. after admin updates in another tab/browser)
+  // Real-time subscription: only enabled when explicitly requested to reduce Supabase egress
   useEffect(() => {
-    const onFocus = () => fetchData();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [fetchData]);
-
-  // Real-time subscription: refetch when table changes so wallet/orders update instantly
-  useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !realtime) return;
     const channel = supabase
-      .channel(`realtime_${tableName}_${Math.random().toString(36).slice(2)}`)
+      .channel(`realtime_${tableName}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => fetchData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [tableName, enabled, fetchData]);
+  }, [tableName, enabled, realtime, fetchData]);
 
   const updateLocalRecord = useCallback((id, updates) => {
     setData(prev => prev.map(r => String(r.id) === String(id) ? { ...r, ...updates } : r));
