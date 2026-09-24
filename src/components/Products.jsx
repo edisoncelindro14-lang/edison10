@@ -50,7 +50,7 @@ export default function Products() {
   const [sortVersion, setSortVersion] = useState(0);
 
   const { data: members = [] } = useTable("members");
-  const { data: transactions = [] } = useTable("transactions");
+  const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions");
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
@@ -149,13 +149,14 @@ export default function Products() {
           const details = item.category === "load"
             ? `${item.name} x${item.qty} → ${mobileNumber}`
             : `${item.name} x${item.qty} → ${address}`;
-          await createRecord("transactions", {
+          const tx = await createRecord("transactions", {
             member_id: currentMember.id,
             type: "withdrawal",
             amount: -(item.price * item.qty),
             description: details,
             status: "pending",
           });
+          addLocalTx(tx);
         }
         toast.success("Order placed successfully! Admin will process it shortly.");
         clearCart();
