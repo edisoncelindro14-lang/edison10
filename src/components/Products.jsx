@@ -154,10 +154,10 @@ export default function Products() {
             type: "withdrawal",
             amount: -(item.price * item.qty),
             description: details,
-            status: "pending",
+            status: "completed",
           });
         }
-        toast.success("Order placed successfully! Admin will process it shortly.");
+        toast.success("Order placed successfully! Paid from wallet.");
         clearCart();
         setCheckoutOpen(false);
       } else {

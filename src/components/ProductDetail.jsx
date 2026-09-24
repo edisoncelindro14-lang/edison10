@@ -81,7 +81,7 @@ export default function ProductDetail({ productId }) {
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -total, description: details, status: "pending" });
+        await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -total, description: details, status: "completed" });
         toast.success("Order placed! Paid from wallet.");
         nav("/Orders");
       } else {
