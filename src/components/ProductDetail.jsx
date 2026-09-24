@@ -82,18 +82,21 @@ export default function ProductDetail({ productId }) {
     setBuying(true);
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
-      const txType = isWallet ? "withdrawal" : "purchase";
-      const description = isWallet ? details : `${details} | Pay to Kabaro`;
-      const tx = await createRecord("transactions", { member_id: currentMember.id, type: txType, amount: -total, description, status: "pending" });
-
       if (isWallet) {
+        await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -total, description: details, status: "pending" });
         toast.success("Order placed! Paid from wallet.");
         nav("/Orders");
       } else {
         const res = await fetch("/api/paymongo/create-link", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: total, member_id: currentMember.id, purpose: "purchase", tx_ids: [tx.id] }),
+          body: JSON.stringify({
+            amount: total,
+            member_id: currentMember.id,
+            purpose: "purchase",
+            items: [{ name: product.name, price: finalPrice, qty, category: product.category }],
+            delivery: hasLoad ? mobileNumber : address,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to create payment link");

@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Supabase not configured" });
   }
 
-  const { amount, member_id, purpose, tx_ids } = req.body || {};
+  const { amount, member_id, purpose, items, delivery } = req.body || {};
   const parsedAmount = parseFloat(amount);
   if (!parsedAmount || parsedAmount < 1) {
     return res.status(400).json({ error: "Amount must be at least ₱1" });
@@ -36,13 +36,37 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "member_id is required" });
   }
   const isPurchase = purpose === "purchase";
-  if (isPurchase && (!Array.isArray(tx_ids) || tx_ids.length === 0)) {
-    return res.status(400).json({ error: "tx_ids is required for purchase payments" });
+  if (isPurchase && (!Array.isArray(items) || items.length === 0)) {
+    return res.status(400).json({ error: "items is required for purchase payments" });
+  }
+
+  // For purchases, create the pending transactions server-side using the
+  // service_role key so they're written regardless of RLS policies. The
+  // previous client-side insert was blocked by RLS for non-admin members,
+  // which prevented the "Pay to Kabaro" redirect from ever happening.
+  let txIds = [];
+  if (isPurchase) {
+    for (const item of items) {
+      const itemTotal = (item.price || 0) * (item.qty || 1);
+      const details = `${item.name} x${item.qty || 1} → ${delivery || ""}`;
+      const { data: tx, error: txError } = await supabase.from("transactions").insert({
+        member_id,
+        type: "purchase",
+        amount: -itemTotal,
+        description: `${details} | Pay to Kabaro`,
+        status: "pending",
+      }).select("id").single();
+      if (txError) {
+        console.error("transaction insert error:", txError.message);
+        return res.status(500).json({ error: "Failed to create order transaction" });
+      }
+      txIds.push(tx.id);
+    }
   }
 
   const amountInCentavos = Math.round(parsedAmount * 100);
   const remarks = isPurchase
-    ? `purpose:purchase|member_id:${member_id}|tx_ids:${tx_ids.join(",")}`
+    ? `purpose:purchase|member_id:${member_id}|tx_ids:${txIds.join(",")}`
     : `member_id:${member_id}`;
 
   try {
@@ -71,9 +95,9 @@ export default async function handler(req, res) {
     const link = data.data.attributes;
     const linkId = data.data.id;
 
-    // Purchases already have their own pending `transactions` rows (created
-    // client-side before this call) — only wallet top-ups need a
-    // conversion_requests row for the webhook to find and approve.
+    // Purchases already have their pending `transactions` rows created
+    // above (server-side) — only wallet top-ups need a conversion_requests
+    // row for the webhook to find and approve.
     if (!isPurchase) {
       const { error: dbError } = await supabase.from("conversion_requests").insert({
         member_id,
