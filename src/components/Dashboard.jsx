@@ -16,7 +16,7 @@ export default function Dashboard() {
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
 
   const myTx = currentMember ? transactions.filter(t => t.member_id === currentMember.id) : [];
-  const walletBalance = calculateWalletBalance(transactions, currentMember.id);
+  const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
   const myOrders = myTx.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const recentOrders = myOrders.slice(0, 5);
