@@ -95,9 +95,33 @@ export default async function handler(req, res) {
 
     if (memberId && amountPaid > 0) {
       try {
-        // Only credit if a matching pending request is still pending — this
-        // keeps retried/duplicate webhook deliveries for the same payment
-        // from crediting the wallet more than once.
+        // Credit the wallet from the paid link itself (member_id comes from
+        // the PayMongo-signed remarks), like the original flow did — don't
+        // depend on the pending conversion_requests row existing. Dedupe
+        // retried webhook deliveries by the payment reference number.
+        const creditDescription = `PayMongo top-up | Ref: ${referenceNumber || linkId} | Auto-credited`;
+        const { data: alreadyCredited } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("member_id", memberId)
+          .eq("description", creditDescription)
+          .limit(1);
+
+        if (alreadyCredited && alreadyCredited[0]) {
+          console.log(`Top-up ${referenceNumber || linkId} already credited — skipping duplicate delivery`);
+        } else {
+          const { error: txError } = await supabase.from("transactions").insert({
+            member_id: memberId,
+            amount: amountPaid,
+            type: "adjustment",
+            status: "completed",
+            description: creditDescription,
+          });
+          if (txError) throw new Error(txError.message);
+          console.log(`Wallet credited: ₱${amountPaid} for member ${memberId}`);
+        }
+
+        // Mark the matching pending request (if one was recorded) as approved.
         const { data: pending } = await supabase
           .from("conversion_requests")
           .select("*")
@@ -115,18 +139,6 @@ export default async function handler(req, res) {
               admin_note: JSON.stringify({ ...existing, reference_number: referenceNumber, paid_at: new Date().toISOString(), auto_approved: true }),
             })
             .eq("id", pending[0].id);
-
-          await supabase.from("transactions").insert({
-            member_id: memberId,
-            amount: amountPaid,
-            type: "adjustment",
-            status: "completed",
-            description: `PayMongo top-up | Ref: ${referenceNumber || "N/A"} | Auto-credited`,
-          });
-
-          console.log(`Wallet credited: ₱${amountPaid} for member ${memberId}`);
-        } else {
-          console.log(`No matching pending request for link ${linkId} — skipping (already processed or not found)`);
         }
       } catch (err) {
         console.error("Wallet credit error:", err.message);
