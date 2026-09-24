@@ -72,7 +72,10 @@ export const TRANSACTION_TYPES = {
 // payments) and top-ups/adjustments affect the balance.
 export function calculateWalletBalance(transactions, memberId) {
   return (transactions || [])
-    .filter(t => t.member_id === memberId && t.status === "completed" && t.type !== "purchase")
+    .filter(t => t.member_id === memberId && t.type !== "purchase" && (
+      // Wallet payments deduct immediately (while pending/processing too); cancelling refunds them.
+      t.type === "withdrawal" ? t.status !== "cancelled" : t.status === "completed"
+    ))
     .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 }
 

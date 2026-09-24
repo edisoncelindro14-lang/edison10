@@ -22,7 +22,7 @@ export default function ProductDetail({ productId }) {
   const [editProduct, setEditProduct] = useState(null);
 
   const { data: members = [] } = useTable("members");
-  const { data: transactions = [] } = useTable("transactions");
+  const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions");
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
@@ -81,7 +81,8 @@ export default function ProductDetail({ productId }) {
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -total, description: details, status: "pending" });
+        const tx = await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -total, description: details, status: "pending" });
+        addLocalTx(tx);
         toast.success("Order placed! Paid from wallet.");
         nav("/Orders");
       } else {
