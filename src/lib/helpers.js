@@ -2,6 +2,14 @@
 
 export const money = n => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
+// Wallet balance = sum of completed transactions, EXCLUDING "Pay to Kabaro"
+// purchases (type "purchase"), which are paid externally via PayMongo and must
+// never deduct from the top-up wallet. Wallet-paid orders use type "withdrawal".
+export const computeWalletBalance = txs =>
+  txs
+    .filter(t => t.status === "completed" && t.type !== "purchase")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
 export function formatDate(date, fmt = "MMM d, yyyy h:mm a") {
   const d = new Date(date);
   if (isNaN(d)) return "";

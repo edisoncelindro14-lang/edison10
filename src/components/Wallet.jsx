@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Wallet as WalletIcon, ArrowRight, TrendingUp, TrendingDown, Plus, Briefcase } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
-import { money, formatDate, TRANSACTION_TYPES } from "../lib/helpers";
+import { money, formatDate, TRANSACTION_TYPES, computeWalletBalance } from "../lib/helpers";
 import { Button, Input, Badge } from "./ui";
 
 const TOPUP_AMOUNTS = [50, 100, 200, 300, 500, 1000];
@@ -35,7 +35,7 @@ export default function Wallet() {
   }
 
   const myTx = transactions.filter(t => t.member_id === currentMember.id);
-  const walletBalance = myTx.filter(t => t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const walletBalance = computeWalletBalance(myTx);
   const totalSpent = myTx.filter(t => (t.type === "withdrawal" || t.type === "purchase") && t.status === "completed").reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
   const isStaff = currentMember.role === "staff";
   const myWithdrawals = myTx.filter(t => t.type === "withdrawal" && t.status === "pending").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
