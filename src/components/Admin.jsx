@@ -316,7 +316,10 @@ export default function Admin({ panelRole } = {}) {
                         <p className="font-medium text-gray-900">{member?.full_name || "Guest"}</p>
                         {member?.phone && <p className="text-xs text-gray-400">{member.phone}</p>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">{o.description || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+                        <p className="truncate">{(o.description || "—").split(" | ")[0]}</p>
+                        {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono">{refPart}</p> : null; })()}
+                      </td>
                       <td className="px-4 py-3 text-sm font-bold text-gray-900">{money(Math.abs(o.amount))}</td>
                       <td className="px-4 py-3">
                         <div className="relative inline-flex items-center">
