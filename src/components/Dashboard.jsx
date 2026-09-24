@@ -189,7 +189,8 @@ export default function Dashboard() {
               {recentOrders.map(o => (
                 <div key={o.id} className="flex items-center justify-between px-6 py-4 hover:bg-gray-50">
                   <div>
-                    <p className="font-medium text-gray-900">{o.description || "Purchase"}</p>
+                    <p className="font-medium text-gray-900">{(o.description || "Purchase").split(" | ")[0]}</p>
+                    {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono">{refPart}</p> : null; })()}
                     <p className="text-sm text-gray-500">{formatDate(o.created_at)}</p>
                   </div>
                   <div className="text-right">
