@@ -5,7 +5,7 @@ import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star 
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -35,9 +35,7 @@ export default function ProductDetail({ productId }) {
   const memberRole = currentMember?.role;
   const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
 
-  const walletBalance = currentMember
-    ? transactions.filter(t => t.member_id === currentMember.id && t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0)
-    : 0;
+  const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
   const product = products.find(p => String(p.id) === String(id)) || FALLBACK_PRODUCTS.find(p => String(p.id) === String(id));
 

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -68,9 +68,7 @@ export default function Products() {
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
   const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
 
-  const walletBalance = currentMember
-    ? transactions.filter(t => t.member_id === currentMember.id && t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0)
-    : 0;
+  const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
   const filtered = orderedProducts.filter(p => {
     if (filterNetwork !== "all" && p.network !== filterNetwork) return false;

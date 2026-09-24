@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Wallet, ArrowRight, ShoppingBag, Zap, Smartphone, TrendingUp, Crown, Shield, Store, Pencil, LayoutDashboard, User } from "lucide-react";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { supabase } from "../lib/supabase";
-import { money, formatDate, FALLBACK_PRODUCTS, NETWORK_COLORS, getFinalPrice } from "../lib/helpers";
+import { money, formatDate, FALLBACK_PRODUCTS, NETWORK_COLORS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { Button } from "./ui";
 
 export default function Dashboard() {
@@ -16,9 +16,7 @@ export default function Dashboard() {
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
 
   const myTx = currentMember ? transactions.filter(t => t.member_id === currentMember.id) : [];
-  const walletBalance = myTx
-    .filter(t => t.status === "completed")
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const walletBalance = calculateWalletBalance(transactions, currentMember.id);
 
   const myOrders = myTx.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const recentOrders = myOrders.slice(0, 5);

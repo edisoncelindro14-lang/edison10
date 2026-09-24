@@ -66,6 +66,16 @@ export const TRANSACTION_TYPES = {
   withdrawal: { label: "Purchase", color: "bg-blue-100 text-blue-700" },
 };
 
+// Wallet balance = sum of completed transactions for a member, EXCLUDING
+// `purchase` rows. Purchases paid via PayMongo ("Pay to Kabaro") are paid
+// externally and must NOT deduct from the wallet — only `withdrawal` (wallet
+// payments) and top-ups/adjustments affect the balance.
+export function calculateWalletBalance(transactions, memberId) {
+  return (transactions || [])
+    .filter(t => t.member_id === memberId && t.status === "completed" && t.type !== "purchase")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+}
+
 export function generateReferralCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
