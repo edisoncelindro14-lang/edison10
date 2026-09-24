@@ -5,8 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 // PayMongo confirms payment via the webhook at /api/paymongo/webhook.
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+// Use the service_role key so the pending conversion_requests row can be
+// written regardless of RLS policies (the anon key has no auth session, so
+// RLS would reject the insert — breaking the webhook's ability to match it).
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 
 const SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
 

@@ -11,8 +11,12 @@ import { createClient } from "@supabase/supabase-js";
 // not guaranteed to reproduce those bytes.
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+// Use the service_role key so the webhook can read conversion_requests and
+// insert transactions regardless of RLS policies. The anon key has no auth
+// session, so RLS blocks its reads/writes — which is why paid top-ups stopped
+// reflecting in the wallet after the Supabase account change.
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 
 const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET;
 
