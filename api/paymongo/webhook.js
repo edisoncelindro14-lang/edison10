@@ -71,24 +71,43 @@ export default async function handler(req, res) {
     const isPurchase = remarks.startsWith("purpose:purchase");
 
     if (isPurchase) {
-      // Shop checkout paid via PayMongo — the pending `transactions` rows
-      // already exist (created client-side before the redirect); just
-      // flip them to completed instead of crediting the wallet.
-      const txIdsMatch = remarks.match(/tx_ids:([a-zA-Z0-9,-]+)/);
-      const txIds = txIdsMatch ? txIdsMatch[1].split(",").filter(Boolean) : [];
-      if (txIds.length > 0) {
-        try {
-          const { data: updated, error } = await supabase
-            .from("transactions")
-            .update({ status: "completed" })
-            .in("id", txIds)
-            .eq("status", "pending")
-            .select();
-          if (error) console.error("Purchase fulfillment error:", error.message);
-          else console.log(`Purchase fulfilled: ${updated?.length || 0} transaction(s) for link ${linkId} | Ref: ${referenceNumber || "N/A"}`);
-        } catch (err) {
-          console.error("Purchase fulfillment error:", err.message);
+      // Shop checkout paid via PayMongo — create the completed transactions
+      // now (no pending rows exist). Dedupe retried webhook deliveries by
+      // the PayMongo reference number embedded in the description.
+      const refTag = `Ref: ${referenceNumber || linkId}`;
+      try {
+        const { data: alreadyFulfilled } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("member_id", memberId)
+          .ilike("description", `%${refTag}%`)
+          .limit(1);
+
+        if (alreadyFulfilled && alreadyFulfilled[0]) {
+          console.log(`Purchase ${refTag} already fulfilled — skipping duplicate delivery`);
+        } else {
+          const itemsMatch = remarks.match(/items:([^|]+)/);
+          const deliveryMatch = remarks.match(/delivery:([^|]+)/);
+          const items = itemsMatch ? JSON.parse(decodeURIComponent(itemsMatch[1])) : [];
+          const delivery = deliveryMatch ? decodeURIComponent(deliveryMatch[1]) : "";
+          let created = 0;
+          for (const item of items) {
+            const itemTotal = (item.price || 0) * (item.qty || 1);
+            const details = `${item.name} x${item.qty || 1} → ${delivery || ""}`;
+            const { error: txError } = await supabase.from("transactions").insert({
+              member_id: memberId,
+              type: "purchase",
+              amount: -itemTotal,
+              description: `${details} | Pay to Kabaro | ${refTag}`,
+              status: "completed",
+            });
+            if (txError) console.error("Purchase transaction insert error:", txError.message);
+            else created++;
+          }
+          console.log(`Purchase fulfilled: ${created} transaction(s) for link ${linkId} | ${refTag}`);
         }
+      } catch (err) {
+        console.error("Purchase fulfillment error:", err.message);
       }
       return res.status(200).json({ received: true, type: eventType });
     }

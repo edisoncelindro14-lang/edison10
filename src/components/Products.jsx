@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -68,9 +68,7 @@ export default function Products() {
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
   const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
 
-  const walletBalance = currentMember
-    ? transactions.filter(t => t.member_id === currentMember.id && t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0)
-    : 0;
+  const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
   const filtered = orderedProducts.filter(p => {
     if (filterNetwork !== "all" && p.network !== filterNetwork) return false;
@@ -146,22 +144,19 @@ export default function Products() {
 
     setBuying(true);
     try {
-      const txIds = [];
-      for (const item of cart) {
-        const details = item.category === "load"
-          ? `${item.name} x${item.qty} → ${mobileNumber}`
-          : `${item.name} x${item.qty} → ${address}`;
-        const tx = await createRecord("transactions", {
-          member_id: currentMember.id,
-          type: isWallet ? "withdrawal" : "purchase",
-          amount: -(item.price * item.qty),
-          description: isWallet ? details : `${details} | Pay to Kabaro`,
-          status: "pending",
-        });
-        txIds.push(tx.id);
-      }
-
       if (isWallet) {
+        for (const item of cart) {
+          const details = item.category === "load"
+            ? `${item.name} x${item.qty} → ${mobileNumber}`
+            : `${item.name} x${item.qty} → ${address}`;
+          await createRecord("transactions", {
+            member_id: currentMember.id,
+            type: "withdrawal",
+            amount: -(item.price * item.qty),
+            description: details,
+            status: "pending",
+          });
+        }
         toast.success("Order placed successfully! Admin will process it shortly.");
         clearCart();
         setCheckoutOpen(false);
@@ -169,7 +164,13 @@ export default function Products() {
         const res = await fetch("/api/paymongo/create-link", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: cartTotal, member_id: currentMember.id, purpose: "purchase", tx_ids: txIds }),
+          body: JSON.stringify({
+            amount: cartTotal,
+            member_id: currentMember.id,
+            purpose: "purchase",
+            items: cart.map(i => ({ name: i.name, price: i.price, qty: i.qty, category: i.category })),
+            delivery: cart.some(i => i.category === "load") ? mobileNumber : address,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to create payment link");

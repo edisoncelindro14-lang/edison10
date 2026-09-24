@@ -5,7 +5,7 @@ import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -144,9 +144,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
   const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
 
-  const walletBalance = currentMember
-    ? transactions.filter(t => t.member_id === currentMember.id && t.status === "completed").reduce((sum, t) => sum + Number(t.amount || 0), 0)
-    : 0;
+  const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
   const featured = orderedProducts.slice(0, 4);
   const bestSellers = orderedProducts.filter(p => getProductBadge(p) === "best_seller").slice(0, 5);

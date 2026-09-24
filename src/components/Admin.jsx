@@ -8,7 +8,7 @@ import {
 import toast from "react-hot-toast";
 import { useTable, updateRecord, createRecord, deleteRecord } from "../lib/useData";
 import { getSessionMemberId } from "../lib/auth";
-import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber } from "../lib/helpers";
+import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber, calculateWalletBalance } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
 
 export default function Admin({ panelRole } = {}) {
@@ -316,7 +316,10 @@ export default function Admin({ panelRole } = {}) {
                         <p className="font-medium text-gray-900">{member?.full_name || "Guest"}</p>
                         {member?.phone && <p className="text-xs text-gray-400">{member.phone}</p>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">{o.description || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+                        <p className="truncate">{(o.description || "—").split(" | ")[0]}</p>
+                        {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono">{refPart}</p> : null; })()}
+                      </td>
                       <td className="px-4 py-3 text-sm font-bold text-gray-900">{money(Math.abs(o.amount))}</td>
                       <td className="px-4 py-3">
                         <div className="relative inline-flex items-center">
@@ -498,8 +501,7 @@ export default function Admin({ panelRole } = {}) {
                     </tr></thead>
                     <tbody>
                       {staffMembers.map(m => {
-                        const memberTx = transactions.filter(t => t.member_id === m.id && t.status === "completed");
-                        const balance = memberTx.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                        const balance = calculateWalletBalance(transactions, m.id);
                         return (
                           <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50">
                             <td className="px-6 py-4 text-sm font-medium text-gray-900">{m.full_name}</td>

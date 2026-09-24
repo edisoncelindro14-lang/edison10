@@ -105,9 +105,10 @@ export default function Orders() {
                     <div className="flex-1 min-w-0 text-left">
                       <div className="flex items-center gap-2">
                         <StatusIcon status={o.status} />
-                        <p className="font-medium text-gray-900 truncate">{o.description || "Purchase"}</p>
+                        <p className="font-medium text-gray-900 truncate">{(o.description || "Purchase").split(" | ")[0]}</p>
                         {hasQR && <QrCode className="w-4 h-4 text-blue-500 flex-shrink-0" />}
                       </div>
+                      {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono">{refPart}</p> : null; })()}
                       <p className="text-sm text-gray-500">{formatDate(o.created_at || o.created_date)}</p>
                     </div>
                     <div className="text-right ml-4">

@@ -40,33 +40,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "items is required for purchase payments" });
   }
 
-  // For purchases, create the pending transactions server-side using the
-  // service_role key so they're written regardless of RLS policies. The
-  // previous client-side insert was blocked by RLS for non-admin members,
-  // which prevented the "Pay to Kabaro" redirect from ever happening.
-  let txIds = [];
-  if (isPurchase) {
-    for (const item of items) {
-      const itemTotal = (item.price || 0) * (item.qty || 1);
-      const details = `${item.name} x${item.qty || 1} → ${delivery || ""}`;
-      const { data: tx, error: txError } = await supabase.from("transactions").insert({
-        member_id,
-        type: "purchase",
-        amount: -itemTotal,
-        description: `${details} | Pay to Kabaro`,
-        status: "pending",
-      }).select("id").single();
-      if (txError) {
-        console.error("transaction insert error:", txError.message);
-        return res.status(500).json({ error: "Failed to create order transaction" });
-      }
-      txIds.push(tx.id);
-    }
-  }
-
+  // For purchases, do NOT create pending transactions — the webhook will
+  // create completed transactions once PayMongo confirms payment. The
+  // order items are encoded in the PayMongo remarks so the webhook can
+  // reconstruct them without relying on pre-existing rows.
   const amountInCentavos = Math.round(parsedAmount * 100);
   const remarks = isPurchase
-    ? `purpose:purchase|member_id:${member_id}|tx_ids:${txIds.join(",")}`
+    ? `purpose:purchase|member_id:${member_id}|items:${encodeURIComponent(JSON.stringify(items))}|delivery:${encodeURIComponent(delivery || "")}`
     : `member_id:${member_id}`;
 
   try {
