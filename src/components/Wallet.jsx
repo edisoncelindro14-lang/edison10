@@ -34,7 +34,7 @@ export default function Wallet() {
     );
   }
 
-  const myTx = transactions.filter(t => t.member_id === currentMember.id);
+  const myTx = transactions.filter(t => t.member_id === currentMember.id && t.status !== "pending");
   const walletBalance = calculateWalletBalance(transactions, currentMember.id);
   const totalSpent = myTx.filter(t => (t.type === "withdrawal" || t.type === "purchase") && t.status === "completed").reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
   const isStaff = currentMember.role === "staff";
@@ -98,7 +98,7 @@ export default function Wallet() {
       </motion.div>
 
       {/* Balance cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-xl">
           <TrendingUp className="w-8 h-8 mb-3" />
           <p className="text-emerald-100 text-sm">Wallet Balance</p>
@@ -108,11 +108,6 @@ export default function Wallet() {
           <WalletIcon className="w-8 h-8 mb-3" />
           <p className="text-blue-100 text-sm">Total Spent</p>
           <p className="text-4xl font-extrabold mt-1">{money(totalSpent)}</p>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-xl">
-          <TrendingDown className="w-8 h-8 mb-3" />
-          <p className="text-amber-100 text-sm">Pending Top-ups</p>
-          <p className="text-4xl font-extrabold mt-1">{myTopupReqs.filter(r => r.status === "pending").length}</p>
         </motion.div>
       </div>
 
