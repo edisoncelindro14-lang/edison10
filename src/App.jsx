@@ -22,6 +22,7 @@ import ResellerPanel from "./components/ResellerPanel";
 import JoytelTest from "./components/JoytelTest";
 import JoytelDealerLogin from "./components/JoytelDealerLogin";
 import JoytelDashboard from "./components/JoytelDashboard";
+import PaymentRedirect from "./components/PaymentRedirect";
 
 const PAGES = {
   Dashboard, Products: ShopHome, Wallet, Orders, Profile, Admin,
@@ -49,6 +50,11 @@ function PageRouter() {
     if (parts.length > 1 && parts[1]) {
       return <PublicShop><ProductDetail productId={parts[1]} /></PublicShop>;
     }
+  }
+
+  // Payment redirect page (accessible without full page reload)
+  if (path.toLowerCase() === "payment") {
+    return <Layout currentPageName="Payment"><PaymentRedirect /></Layout>;
   }
 
   // Protected routes

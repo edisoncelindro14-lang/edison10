@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Wallet as WalletIcon, ArrowRight, TrendingUp, TrendingDown, Plus, Briefcase } from "lucide-react";
 import toast from "react-hot-toast";
@@ -53,7 +53,7 @@ export default function Wallet() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create payment link");
-      window.location.href = data.checkout_url;
+      nav("/Payment", { state: { checkout_url: data.checkout_url } });
     } catch (err) {
       toast.error(err.message || "Failed to start PayMongo payment");
       setSubmitting(false);

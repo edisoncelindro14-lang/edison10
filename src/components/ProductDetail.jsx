@@ -99,7 +99,7 @@ export default function ProductDetail({ productId }) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to create payment link");
-        window.location.href = data.checkout_url;
+        nav("/Payment", { state: { checkout_url: data.checkout_url } });
       }
     } catch (err) { toast.error(err?.message || "Failed to place order"); }
     setBuying(false);
