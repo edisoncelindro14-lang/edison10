@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShieldCheck, LayoutDashboard, ExternalLink } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "./ui";
 
 export default function PaymentRedirect() {
@@ -41,18 +42,23 @@ export default function PaymentRedirect() {
         <motion.div
           initial={{ scale: 0.8 }} animate={{ scale: 1 }}
           transition={{ type: "spring", damping: 15 }}
-          className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl mx-auto mb-6 flex items-center justify-center"
+          className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl mx-auto mb-4 flex items-center justify-center"
         >
-          <ShieldCheck className="w-10 h-10 text-white" />
+          <ShieldCheck className="w-8 h-8 text-white" />
         </motion.div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Redirecting to Secure Payment</h1>
-        <p className="text-gray-600 mb-8">You'll be redirected to our payment partner (PayMongo) to complete your purchase securely.</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Scan to Pay</h1>
+        <p className="text-gray-600 mb-6">Scan the QR code below with your camera or payment app to complete your purchase.</p>
+
+        <div className="inline-block bg-white p-4 rounded-2xl shadow-lg border border-gray-100 mb-6">
+          <QRCodeSVG value={checkoutUrl} size={224} level="M" />
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button onClick={() => { redirected.current = true; nav("/Dashboard"); }} variant="outline" className="border-gray-300">
             <LayoutDashboard className="w-5 h-5 mr-2" /> Back to Dashboard
           </Button>
           <Button onClick={() => { redirected.current = true; window.location.href = checkoutUrl; }} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">
-            <ExternalLink className="w-5 h-5 mr-2" /> Pay Now
+            <ExternalLink className="w-5 h-5 mr-2" /> Open Payment Link
           </Button>
         </div>
         <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-400">
