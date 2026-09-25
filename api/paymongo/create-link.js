@@ -62,6 +62,7 @@ export default async function handler(req, res) {
             amount: amountInCentavos,
             description: isPurchase ? `Kabaro order payment ₱${parsedAmount}` : `Wallet top-up ₱${parsedAmount}`,
             remarks,
+            payment_method_allowed: ["qrph"],
           },
         },
       }),
