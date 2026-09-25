@@ -40,5 +40,8 @@ Fixes applied:
 - Public pages (shop, login, register) no longer fetch `members` or `transactions` — only `products` on the shop page.
 - `Layout.jsx` skips fetching when on auth pages (login/register).
 
+## PayMongo
+`api/paymongo/create-link.js` creates a Checkout Session with `payment_method_types: ["qrph"]` so the QR shows at once (the Payment Links API always shows a method picker first). The PayMongo webhook needs the `checkout_session.payment.paid` event; `link.payment.paid` still works for older links. Needs `PAYMONGO_SECRET_KEY` (not set in the sandbox).
+
 ## Verify
 `curl -sf -H "Host: external-preview.example.com" http://localhost:3000/` returns the landing page HTML.

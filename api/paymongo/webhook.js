@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 // PayMongo calls this endpoint when a payment link is paid.
 // Register it in the PayMongo dashboard as:
-//   https://<your-domain>/api/paymongo/webhook  (event: link.payment.paid)
+//   https://<your-domain>/api/paymongo/webhook
+//   (events: checkout_session.payment.paid, and link.payment.paid for older links)
 //
 // We read the raw request stream directly (rather than the req.body
 // getter) because signature verification needs the exact raw bytes
@@ -60,11 +61,16 @@ export default async function handler(req, res) {
   const eventData = event?.data?.attributes?.data;
   console.log(`PayMongo webhook: ${eventType}`);
 
-  if (eventType === "link.payment.paid" && supabase) {
+  const isCheckoutSession = eventType === "checkout_session.payment.paid";
+  if ((eventType === "link.payment.paid" || isCheckoutSession) && supabase) {
     const attrs = eventData?.attributes || {};
-    const amountPaid = attrs.amount ? attrs.amount / 100 : 0;
+    // Checkout Sessions carry the amount on their payments and the remarks in metadata.
+    const amountCentavos = isCheckoutSession
+      ? (attrs.payments || []).reduce((sum, p) => sum + (p.attributes?.amount || 0), 0)
+      : attrs.amount;
+    const amountPaid = amountCentavos ? amountCentavos / 100 : 0;
     const referenceNumber = attrs.reference_number;
-    const remarks = attrs.remarks || "";
+    const remarks = (isCheckoutSession ? attrs.metadata?.remarks : attrs.remarks) || "";
     const memberIdMatch = remarks.match(/member_id:([a-zA-Z0-9-]+)/);
     const memberId = memberIdMatch ? memberIdMatch[1] : null;
     const linkId = eventData?.id;

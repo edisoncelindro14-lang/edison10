@@ -50,7 +50,10 @@ export default async function handler(req, res) {
     : `member_id:${member_id}`;
 
   try {
-    const response = await fetch("https://api.paymongo.com/v1/links", {
+    // A Checkout Session restricted to QR Ph opens straight to the QR code
+    // (Payment Links always show a method picker first).
+    const description = isPurchase ? `Kabaro order payment ₱${parsedAmount}` : `Wallet top-up ₱${parsedAmount}`;
+    const response = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -59,9 +62,10 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: amountInCentavos,
-            description: isPurchase ? `Kabaro order payment ₱${parsedAmount}` : `Wallet top-up ₱${parsedAmount}`,
-            remarks,
+            line_items: [{ name: description, amount: amountInCentavos, currency: "PHP", quantity: 1 }],
+            payment_method_types: ["qrph"],
+            description,
+            metadata: { remarks },
           },
         },
       }),
