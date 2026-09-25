@@ -91,8 +91,8 @@ export default function Wallet() {
             <WalletIcon className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Wallet</h1>
-            <p className="text-gray-500">Top up and manage your balance</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Wallet</h1>
+            <p className="text-sm text-gray-500">Top up and manage your balance</p>
           </div>
         </div>
       </motion.div>
@@ -102,31 +102,31 @@ export default function Wallet() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-xl">
           <TrendingUp className="w-8 h-8 mb-3" />
           <p className="text-emerald-100 text-sm">Wallet Balance</p>
-          <p className="text-4xl font-extrabold mt-1">{money(walletBalance)}</p>
+          <p className="text-3xl sm:text-4xl font-extrabold mt-1">{money(walletBalance)}</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl p-6 text-white shadow-xl">
           <WalletIcon className="w-8 h-8 mb-3" />
           <p className="text-blue-100 text-sm">Total Spent</p>
-          <p className="text-4xl font-extrabold mt-1">{money(totalSpent)}</p>
+          <p className="text-3xl sm:text-4xl font-extrabold mt-1">{money(totalSpent)}</p>
         </motion.div>
       </div>
 
       {/* Top up form */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-8">
         <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-emerald-500" /> Top Up Wallet</h2>
-        <div className="flex gap-3 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4">
           {TOPUP_AMOUNTS.map(a => (
-            <button key={a} onClick={() => setTopupAmount(String(a))} className={`px-4 py-2 rounded-xl border font-bold text-sm transition-all ${topupAmount === String(a) ? "bg-emerald-500 text-white border-emerald-500" : "border-gray-200 text-gray-600 hover:border-emerald-300"}`}>
+            <button key={a} onClick={() => setTopupAmount(String(a))} className={`px-3 py-2 rounded-xl border font-bold text-sm transition-all ${topupAmount === String(a) ? "bg-emerald-500 text-white border-emerald-500" : "border-gray-200 text-gray-600 hover:border-emerald-300"}`}>
               ₱{a}
             </button>
           ))}
         </div>
-        <div className="flex gap-3 items-end">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1">
             <label className="text-sm font-medium text-gray-700">Custom Amount (₱)</label>
             <Input type="number" value={topupAmount} onChange={e => setTopupAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
           </div>
-          <Button onClick={handleTopup} disabled={submitting} className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white h-12 px-8">
+          <Button onClick={handleTopup} disabled={submitting} className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white h-12 px-6 sm:px-8">
             {submitting ? "Submitting..." : "Request Top-up"}
           </Button>
         </div>
@@ -148,12 +148,12 @@ export default function Wallet() {
               <p className="text-amber-800">No GCash number set. <Link to="/Profile" className="font-bold underline">Add your GCash details</Link> in your Profile to receive payouts.</p>
             </div>
           )}
-          <div className="flex gap-3 items-end">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
             <div className="flex-1">
               <label className="text-sm font-medium text-gray-700">Withdrawal Amount (₱)</label>
               <Input type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Enter amount" className="mt-1" />
             </div>
-            <Button onClick={handleWithdraw} disabled={submitting || !currentMember.gcash_number} className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white h-12 px-8 disabled:opacity-40 disabled:cursor-not-allowed">
+            <Button onClick={handleWithdraw} disabled={submitting || !currentMember.gcash_number} className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white h-12 px-6 sm:px-8 disabled:opacity-40 disabled:cursor-not-allowed">
               {submitting ? "Submitting..." : "Request Withdrawal"}
             </Button>
           </div>
@@ -177,13 +177,13 @@ export default function Wallet() {
       {/* Top-up history */}
       {myTopupReqs.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mb-8">
-          <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-900">Top-up Requests</h2></div>
+          <div className="p-4 sm:p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-900">Top-up Requests</h2></div>
           <div className="divide-y divide-gray-50">
             {myTopupReqs.map(r => {
               let note = {};
               try { note = r.admin_note ? JSON.parse(r.admin_note) : {}; } catch {}
               return (
-                <div key={r.id} className="flex items-center justify-between px-6 py-4">
+                <div key={r.id} className="flex items-center justify-between px-4 sm:px-6 py-4">
                   <div>
                     <p className="font-medium text-gray-900">{money(r.amount)}</p>
                     {note.reference_number && <p className="text-xs text-gray-400 font-mono">Ref: {note.reference_number}</p>}
@@ -200,7 +200,7 @@ export default function Wallet() {
 
       {/* Transaction history */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-900">Transaction History</h2></div>
+        <div className="p-4 sm:p-6 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-900">Transaction History</h2></div>
         {myTx.length === 0 ? (
           <div className="p-12 text-center text-gray-400">No transactions yet</div>
         ) : (
@@ -213,7 +213,7 @@ export default function Wallet() {
               const refPart = descParts.find(p => p.startsWith("Ref:"));
               const byPart = descParts.find(p => p.startsWith("By:"));
               return (
-                <div key={tx.id} className="flex items-center justify-between px-6 py-4">
+                <div key={tx.id} className="flex items-center justify-between px-4 sm:px-6 py-4">
                   <div>
                     <p className="font-medium text-gray-900">{mainDesc}</p>
                     {refPart && <p className="text-xs text-gray-400 font-mono">{refPart}</p>}

@@ -213,11 +213,11 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             type: "withdrawal",
             amount: -(item.price * item.qty),
             description: details,
-            status: "pending",
+            status: "completed",
           });
           addLocalTx(tx);
         }
-        toast.success("Order placed successfully! Admin will process it shortly.");
+        toast.success("Order placed! Paid from wallet.");
         clearCart(); setCheckoutOpen(false);
       } else {
         const res = await fetch("/api/paymongo/create-link", {
