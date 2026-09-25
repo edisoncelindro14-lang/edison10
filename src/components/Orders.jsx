@@ -71,11 +71,11 @@ export default function Orders() {
       </motion.div>
 
       {/* Filter */}
-      <div className="flex items-center gap-2 mb-6">
-        <Filter className="w-4 h-4 text-gray-400" />
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
+        <Filter className="w-4 h-4 text-gray-400 flex-shrink-0" />
         {["all", "pending", "completed", "cancelled"].map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all ${filter === f ? "bg-orange-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all whitespace-nowrap flex-shrink-0 ${filter === f ? "bg-orange-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
             {f}
           </button>
         ))}
@@ -100,7 +100,7 @@ export default function Orders() {
                 <div key={o.id}>
                   <button
                     onClick={() => hasQR ? setExpandedOrder(isExpanded ? null : o.id) : null}
-                    className={`w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 ${hasQR ? "cursor-pointer" : "cursor-default"}`}
+                    className={`w-full flex items-center justify-between px-4 sm:px-6 py-4 hover:bg-gray-50 ${hasQR ? "cursor-pointer" : "cursor-default"}`}
                   >
                     <div className="flex-1 min-w-0 text-left">
                       <div className="flex items-center gap-2">
@@ -108,10 +108,10 @@ export default function Orders() {
                         <p className="font-medium text-gray-900 truncate">{(o.description || "Purchase").split(" | ")[0]}</p>
                         {hasQR && <QrCode className="w-4 h-4 text-blue-500 flex-shrink-0" />}
                       </div>
-                      {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono">{refPart}</p> : null; })()}
+                      {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono truncate">{refPart}</p> : null; })()}
                       <p className="text-sm text-gray-500">{formatDate(o.created_at || o.created_date)}</p>
                     </div>
-                    <div className="text-right ml-4">
+                    <div className="text-right ml-3 flex-shrink-0">
                       <p className="font-bold text-gray-900">{money(Math.abs(o.amount))}</p>
                       <Badge className={o.status === "completed" ? "bg-green-100 text-green-700" : o.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>{o.status}</Badge>
                     </div>
@@ -119,7 +119,7 @@ export default function Orders() {
 
                   {/* QR Code expandable section */}
                   {isExpanded && hasQR && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="px-6 pb-4 bg-blue-50 border-t border-blue-100">
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="px-4 sm:px-6 pb-4 bg-blue-50 border-t border-blue-100">
                       <div className="py-4 flex flex-col sm:flex-row items-center gap-4">
                         {(() => {
                           const qrUrl = joytelData?.qrCode || joytelData?.qrResponse?.data?.[0]?.qrCode || joytelData?.qrResponse?.data?.qrCode;
