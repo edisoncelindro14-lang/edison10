@@ -304,18 +304,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         </div>
       </div>
 
-      {/* Featured Products */}
-      {featured.length > 0 && (
-        <section className="mb-10">
-          <div className="mb-4">
-            <p className="text-xs font-bold text-indigo-600 uppercase">Handpicked</p>
-            <h2 className="text-2xl font-bold text-gray-900">Featured Products</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {featured.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
-          </div>
-        </section>
-      )}
+
 
       {/* Shop by Category */}
       <section className="mb-10">

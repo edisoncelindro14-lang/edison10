@@ -150,26 +150,7 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Quick buy */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Quick Buy</h2>
-          <Link to="/Products" className="text-sm font-semibold text-orange-600 hover:text-orange-700">View all →</Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {featuredProducts.map(p => (
-            <Link key={p.id} to="/Products">
-              <div className="bg-white rounded-2xl shadow border border-gray-100 p-4 text-center hover:shadow-lg hover:border-amber-300 transition-all cursor-pointer">
-                <div className={`w-12 h-12 bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} rounded-xl flex items-center justify-center mx-auto mb-2`}>
-                  {p.category === "sim" ? <Smartphone className="w-6 h-6 text-white" /> : <Zap className="w-6 h-6 text-white" />}
-                </div>
-                <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
-                <p className="text-lg font-extrabold text-orange-600 mt-1">{money(getFinalPrice(p))}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </motion.div>
+
 
       {/* Recent orders */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
