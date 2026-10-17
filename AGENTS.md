@@ -16,6 +16,7 @@ Placeholder values in `.env.base44-defaults` let the landing page render before 
 ## Supabase backend setup (user does this in their own Supabase project)
 1. Run `supabase/migrations/001_initial_schema.sql` then `002_redeem_function.sql`.
 2. Run `supabase/migrations/005_roles_and_product_images.sql` through `008_staff_role.sql` (adds the `staff` role to the DB constraint — required for the staff promotion system).
+3. Run `supabase/migrations/011_product_sort_order.sql` (adds the `products.sort_order` column — required for the drag-and-drop product layout to sync across devices/deployments instead of per-browser localStorage).
 3. Deploy Edge Functions: `redeem-maintenance-code` (in repo), plus `member-login` and `register-member` (referenced by the UI but not included in the repo).
 
 ## Staff Promotion System

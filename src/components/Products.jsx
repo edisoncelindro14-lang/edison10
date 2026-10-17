@@ -8,29 +8,7 @@ import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calc
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
-
-const SORT_ORDER_KEY = "kabaro_product_sort_order";
-
-function loadSortOrder() {
-  try { return JSON.parse(localStorage.getItem(SORT_ORDER_KEY) || "[]"); } catch { return []; }
-}
-
-function saveSortOrder(ids) {
-  localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(ids));
-}
-
-function sortByStoredOrder(products) {
-  const order = loadSortOrder();
-  if (!order.length) return products;
-  const indexMap = {};
-  order.forEach((id, i) => { indexMap[id] = i; });
-  return [...products].sort((a, b) => {
-    const aIdx = indexMap[a.id] ?? 9999;
-    const bIdx = indexMap[b.id] ?? 9999;
-    if (aIdx !== bIdx) return aIdx - bIdx;
-    return 0;
-  });
-}
+import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
 
 export default function Products() {
   const nav = useNavigate();
@@ -51,7 +29,7 @@ export default function Products() {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions");
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
@@ -62,11 +40,13 @@ export default function Products() {
 
   const memberRole = currentMember?.role;
   const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
+  // Only admins/super_admins may reorder product cards via drag-and-drop.
+  const canReorder = memberRole === "super_admin" || memberRole === "admin";
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   // For admin/reseller, show ALL products (including inactive). For regular users, only active.
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
-  const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
+  const orderedProducts = useMemo(() => sortProductsByOrder(visibleProducts), [visibleProducts, sortVersion]);
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
@@ -118,19 +98,25 @@ export default function Products() {
     e.preventDefault();
     e.stopPropagation();
     if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return; }
-    const currentOrder = filtered.map(p => p.id);
-    const fromIdx = currentOrder.indexOf(draggedId);
-    const toIdx = currentOrder.indexOf(targetId);
+    // Reorder within the full product list (not just the filtered view) so the
+    // saved sort_order is consistent across every device and deployment.
+    const fullOrder = orderedProducts.map(p => p.id);
+    const fromIdx = fullOrder.indexOf(draggedId);
+    const toIdx = fullOrder.indexOf(targetId);
     if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return; }
-    const newOrder = [...currentOrder];
+    const newOrder = [...fullOrder];
     newOrder.splice(fromIdx, 1);
     newOrder.splice(toIdx, 0, draggedId);
-    // Merge with any existing stored order for products not in current filter
-    const stored = loadSortOrder().filter(id => !newOrder.includes(id));
-    saveSortOrder([...newOrder, ...stored]);
+    // Optimistically reflect the new order locally, then persist to the server.
+    newOrder.forEach((id, i) => updateLocalRecord(id, { sort_order: i }));
     setDraggedId(null);
     setDragOverId(null);
     setSortVersion(v => v + 1);
+    persistProductOrder(newOrder).catch(err => {
+      console.error("Failed to persist product order:", err);
+      toast.error("Could not save product order — showing the last saved layout.");
+      refetchProducts();
+    });
   }
 
   async function handleCheckout(paymentMethod) {
@@ -240,12 +226,12 @@ export default function Products() {
           const isAvailable = p.is_active !== false;
           return (
             <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-              draggable={canManage}
-              onDragStart={(e) => handleDragStart(e, p.id)}
-              onDragOver={(e) => handleDragOver(e, p.id)}
-              onDrop={(e) => handleDrop(e, p.id)}
-              onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${canManage ? "cursor-grab active:cursor-grabbing" : ""}`}
+              draggable={canReorder}
+              onDragStart={canReorder ? (e) => handleDragStart(e, p.id) : undefined}
+              onDragOver={canReorder ? (e) => handleDragOver(e, p.id) : undefined}
+              onDrop={canReorder ? (e) => handleDrop(e, p.id) : undefined}
+              onDragEnd={canReorder ? () => { setDraggedId(null); setDragOverId(null); } : undefined}
+              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${canReorder ? "cursor-grab active:cursor-grabbing" : ""}`}
               onClick={() => nav(`/Products/${p.id}`)}>
               {/* Not Available stamp */}
               {!isAvailable && (
@@ -256,9 +242,11 @@ export default function Products() {
               {/* Drag handle + Edit button for admin/reseller */}
               {canManage && (
                 <>
-                  <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
-                    <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-                  </div>
+                  {canReorder && (
+                    <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
+                      <GripVertical className="w-3.5 h-3.5 text-gray-500" />
+                    </div>
+                  )}
                   <button onClick={(e) => { e.stopPropagation(); setEditProduct(p); }}
                     className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
                     <Pencil className="w-3.5 h-3.5 text-gray-600" />

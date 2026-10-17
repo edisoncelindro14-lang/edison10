@@ -9,24 +9,7 @@ import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
-
-const SORT_ORDER_KEY = "kabaro_product_sort_order";
-function loadSortOrder() { try { return JSON.parse(localStorage.getItem(SORT_ORDER_KEY) || "[]"); } catch { return []; } }
-function saveSortOrder(ids) { localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(ids)); }
-function sortByStoredOrder(products) {
-  const order = loadSortOrder();
-  if (!order.length) return products;
-  const indexMap = {};
-  order.forEach((id, i) => { indexMap[id] = i; });
-  return [...products].sort((a, b) => {
-    const aIdx = indexMap[a.id];
-    const bIdx = indexMap[b.id];
-    if (aIdx !== undefined && bIdx !== undefined) return aIdx - bIdx;
-    if (aIdx !== undefined) return -1;
-    if (bIdx !== undefined) return 1;
-    return 0; // preserve original order for products not in stored sort
-  });
-}
+import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
 
 function StarRating({ rating, count }) {
   return (
@@ -39,7 +22,7 @@ function StarRating({ rating, count }) {
   );
 }
 
-function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
+function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
   const nav = useNavigate();
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
@@ -51,11 +34,11 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      draggable={canManage}
-      onDragStart={(e) => onDragStart(e, product.id)}
-      onDragOver={(e) => onDragOver(e, product.id)}
-      onDrop={(e) => onDrop(e, product.id)}
-      onDragEnd={onDragEnd}
+      draggable={canReorder}
+      onDragStart={canReorder ? (e) => onDragStart(e, product.id) : undefined}
+      onDragOver={canReorder ? (e) => onDragOver(e, product.id) : undefined}
+      onDrop={canReorder ? (e) => onDrop(e, product.id) : undefined}
+      onDragEnd={canReorder ? onDragEnd : undefined}
       className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group cursor-pointer
         ${dragOverId === product.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"}
         ${draggedId === product.id ? "opacity-40" : ""}`}
@@ -74,9 +57,11 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
       </div>
       {canManage && (
         <>
-          <div className="absolute top-2 right-10 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
-            <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-          </div>
+          {canReorder && (
+            <div className="absolute top-2 right-10 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
+              <GripVertical className="w-3.5 h-3.5 text-gray-500" />
+            </div>
+          )}
           <button onClick={(e) => { e.stopPropagation(); onEdit(product); }}
             className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
             <Pencil className="w-3.5 h-3.5 text-gray-600" />
@@ -135,7 +120,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const { data: members = [] } = useTable("members", { enabled: !readOnly });
   const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions", { enabled: !readOnly });
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
@@ -146,10 +131,12 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const memberRole = currentMember?.role;
   const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
+  // Only admins/super_admins may reorder product cards via drag-and-drop.
+  const canReorder = !readOnly && (memberRole === "super_admin" || memberRole === "admin");
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
-  const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
+  const orderedProducts = useMemo(() => sortProductsByOrder(visibleProducts), [visibleProducts, sortVersion]);
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
@@ -175,14 +162,10 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   function handleEditSaved(updatedProduct) {
     const scrollY = window.scrollY;
-    // Capture current display order so the edited product stays in place
-    const currentOrder = orderedProducts.map(p => p.id);
     if (updatedProduct?.id) {
       const exists = products.some(p => String(p.id) === String(updatedProduct.id));
       if (exists) updateLocalRecord(updatedProduct.id, updatedProduct);
       else addLocalRecord(updatedProduct);
-      // Persist current order so sortByStoredOrder keeps positions after re-render
-      saveSortOrder(currentOrder);
       setSortVersion(v => v + 1);
     } else { refetchProducts(); }
     setEditProduct(null);
@@ -194,14 +177,21 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   function handleDrop(e, targetId) {
     e.preventDefault(); e.stopPropagation();
     if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return; }
-    const currentOrder = filtered.map(p => p.id);
-    const fromIdx = currentOrder.indexOf(draggedId);
-    const toIdx = currentOrder.indexOf(targetId);
+    // Reorder within the full product list (not just the filtered view) so the
+    // saved sort_order is consistent across every device and deployment.
+    const fullOrder = orderedProducts.map(p => p.id);
+    const fromIdx = fullOrder.indexOf(draggedId);
+    const toIdx = fullOrder.indexOf(targetId);
     if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return; }
-    const newOrder = [...currentOrder]; newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, draggedId);
-    const stored = loadSortOrder().filter(id => !newOrder.includes(id));
-    saveSortOrder([...newOrder, ...stored]);
+    const newOrder = [...fullOrder]; newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, draggedId);
+    // Optimistically reflect the new order locally, then persist to the server.
+    newOrder.forEach((id, i) => updateLocalRecord(id, { sort_order: i }));
     setDraggedId(null); setDragOverId(null); setSortVersion(v => v + 1);
+    persistProductOrder(newOrder).catch(err => {
+      console.error("Failed to persist product order:", err);
+      toast.error("Could not save product order — showing the last saved layout.");
+      refetchProducts();
+    });
   }
 
   async function handleCheckout(paymentMethod) {
@@ -251,7 +241,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { canManage, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
+  const cardProps = { canManage, canReorder, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
