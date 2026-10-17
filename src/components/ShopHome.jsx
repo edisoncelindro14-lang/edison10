@@ -155,8 +155,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const featured = orderedProducts.slice(0, 4);
   const bestSellers = orderedProducts.filter(p => getProductBadge(p) === "best_seller").slice(0, 5);
-  const bestSellerFallback = orderedProducts.slice(4, 9);
-  const bestSellerList = bestSellers.length >= 4 ? bestSellers : bestSellerFallback;
+  const bestSellerList = bestSellers.length > 0 ? bestSellers : orderedProducts.slice(4, 9);
 
   const filtered = orderedProducts.filter(p => {
     if (filterCategory !== "all" && p.category !== filterCategory) return false;
