@@ -40,6 +40,8 @@ export default function Products() {
 
   const memberRole = currentMember?.role;
   const canManage = memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok";
+  // Only admins/super_admins may reorder product cards via drag-and-drop.
+  const canReorder = memberRole === "super_admin" || memberRole === "admin";
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   // For admin/reseller, show ALL products (including inactive). For regular users, only active.
@@ -224,12 +226,12 @@ export default function Products() {
           const isAvailable = p.is_active !== false;
           return (
             <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-              draggable={canManage}
-              onDragStart={(e) => handleDragStart(e, p.id)}
-              onDragOver={(e) => handleDragOver(e, p.id)}
-              onDrop={(e) => handleDrop(e, p.id)}
-              onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${canManage ? "cursor-grab active:cursor-grabbing" : ""}`}
+              draggable={canReorder}
+              onDragStart={canReorder ? (e) => handleDragStart(e, p.id) : undefined}
+              onDragOver={canReorder ? (e) => handleDragOver(e, p.id) : undefined}
+              onDrop={canReorder ? (e) => handleDrop(e, p.id) : undefined}
+              onDragEnd={canReorder ? () => { setDraggedId(null); setDragOverId(null); } : undefined}
+              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${canReorder ? "cursor-grab active:cursor-grabbing" : ""}`}
               onClick={() => nav(`/Products/${p.id}`)}>
               {/* Not Available stamp */}
               {!isAvailable && (
@@ -240,9 +242,11 @@ export default function Products() {
               {/* Drag handle + Edit button for admin/reseller */}
               {canManage && (
                 <>
-                  <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
-                    <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-                  </div>
+                  {canReorder && (
+                    <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
+                      <GripVertical className="w-3.5 h-3.5 text-gray-500" />
+                    </div>
+                  )}
                   <button onClick={(e) => { e.stopPropagation(); setEditProduct(p); }}
                     className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
                     <Pencil className="w-3.5 h-3.5 text-gray-600" />

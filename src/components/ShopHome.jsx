@@ -22,7 +22,7 @@ function StarRating({ rating, count }) {
   );
 }
 
-function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
+function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
   const nav = useNavigate();
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
@@ -34,11 +34,11 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      draggable={canManage}
-      onDragStart={(e) => onDragStart(e, product.id)}
-      onDragOver={(e) => onDragOver(e, product.id)}
-      onDrop={(e) => onDrop(e, product.id)}
-      onDragEnd={onDragEnd}
+      draggable={canReorder}
+      onDragStart={canReorder ? (e) => onDragStart(e, product.id) : undefined}
+      onDragOver={canReorder ? (e) => onDragOver(e, product.id) : undefined}
+      onDrop={canReorder ? (e) => onDrop(e, product.id) : undefined}
+      onDragEnd={canReorder ? onDragEnd : undefined}
       className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group cursor-pointer
         ${dragOverId === product.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"}
         ${draggedId === product.id ? "opacity-40" : ""}`}
@@ -57,9 +57,11 @@ function ProductCard({ product, canManage, onEdit, onAddToCart, onDragStart, onD
       </div>
       {canManage && (
         <>
-          <div className="absolute top-2 right-10 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
-            <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-          </div>
+          {canReorder && (
+            <div className="absolute top-2 right-10 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
+              <GripVertical className="w-3.5 h-3.5 text-gray-500" />
+            </div>
+          )}
           <button onClick={(e) => { e.stopPropagation(); onEdit(product); }}
             className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
             <Pencil className="w-3.5 h-3.5 text-gray-600" />
@@ -129,6 +131,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const memberRole = currentMember?.role;
   const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
+  // Only admins/super_admins may reorder product cards via drag-and-drop.
+  const canReorder = !readOnly && (memberRole === "super_admin" || memberRole === "admin");
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
@@ -237,7 +241,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { canManage, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
+  const cardProps = { canManage, canReorder, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
