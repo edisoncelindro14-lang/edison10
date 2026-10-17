@@ -2,6 +2,25 @@
 
 body {
   font-family: 'Inter', sans-serif;
+  background-color: #ffffff;
+}
+
+/* Logo watermark on all pages */
+body::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  background-image: url('https://media.base44.com/images/public/6ad38f1ede80e3bf94df27f2/3c1017da3_joytel_screenshot.jpg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.08;
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* Custom scrollbar */
