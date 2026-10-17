@@ -176,10 +176,15 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   function handleEditSaved(updatedProduct) {
     const scrollY = window.scrollY;
+    // Capture current display order so the edited product stays in place
+    const currentOrder = orderedProducts.map(p => p.id);
     if (updatedProduct?.id) {
       const exists = products.some(p => String(p.id) === String(updatedProduct.id));
       if (exists) updateLocalRecord(updatedProduct.id, updatedProduct);
       else addLocalRecord(updatedProduct);
+      // Persist current order so sortByStoredOrder keeps positions after re-render
+      saveSortOrder(currentOrder);
+      setSortVersion(v => v + 1);
     } else { refetchProducts(); }
     setEditProduct(null);
     requestAnimationFrame(() => window.scrollTo(0, scrollY));
