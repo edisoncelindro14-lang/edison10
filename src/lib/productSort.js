@@ -24,12 +24,15 @@ export function sortProductsByOrder(products) {
 
 // Persist the full display order to the server. `orderedIds` is the complete
 // list of product ids in the desired display order; each is assigned an
-// incrementing sort_order. Upsert-on-conflict updates only `sort_order` for
-// existing rows, leaving every other product field untouched.
+// incrementing sort_order. We update each row individually (in parallel) rather
+// than upsert, because a partial-column upsert trips the NOT NULL constraint on
+// `name` during PostgREST's insert attempt before the on-conflict update runs.
 export async function persistProductOrder(orderedIds) {
-  const updates = orderedIds.map((id, index) => ({ id, sort_order: index }));
-  const { error } = await supabase
-    .from("products")
-    .upsert(updates, { onConflict: "id" });
-  if (error) throw error;
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("products").update({ sort_order: index }).eq("id", id)
+    )
+  );
+  const failed = results.find(r => r.error);
+  if (failed) throw failed.error;
 }
