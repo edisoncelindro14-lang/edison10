@@ -10,7 +10,7 @@ const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4
 
 const NAV_ITEMS = [
   { name: "Dashboard", icon: LayoutDashboard, path: "Dashboard" },
-  { name: "Buy Load & SIM", icon: Smartphone, path: "Products" },
+  { name: "Online Shop", icon: Smartphone, path: "Products" },
   { name: "My Wallet", icon: Wallet, path: "Wallet" },
   { name: "My Orders", icon: ShoppingBag, path: "Orders" },
   { name: "My Profile", icon: User, path: "Profile" },

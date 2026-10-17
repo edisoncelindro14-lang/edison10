@@ -1,4 +1,4 @@
-const { Pool } = require("pg");
+import { Pool } from "pg";
 
 export default async function handler(req, res) {
   const dbPassword = process.env.SUPABASE_DB_PASSWORD;

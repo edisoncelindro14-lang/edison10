@@ -18,7 +18,14 @@ function sortByStoredOrder(products) {
   if (!order.length) return products;
   const indexMap = {};
   order.forEach((id, i) => { indexMap[id] = i; });
-  return [...products].sort((a, b) => (indexMap[a.id] ?? 9999) - (indexMap[b.id] ?? 9999));
+  return [...products].sort((a, b) => {
+    const aIdx = indexMap[a.id];
+    const bIdx = indexMap[b.id];
+    if (aIdx !== undefined && bIdx !== undefined) return aIdx - bIdx;
+    if (aIdx !== undefined) return -1;
+    if (bIdx !== undefined) return 1;
+    return 0; // preserve original order for products not in stored sort
+  });
 }
 
 function StarRating({ rating, count }) {
@@ -148,8 +155,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const featured = orderedProducts.slice(0, 4);
   const bestSellers = orderedProducts.filter(p => getProductBadge(p) === "best_seller").slice(0, 5);
-  const bestSellerFallback = orderedProducts.slice(4, 9);
-  const bestSellerList = bestSellers.length >= 4 ? bestSellers : bestSellerFallback;
+  const bestSellerList = bestSellers.length > 0 ? bestSellers : orderedProducts.slice(4, 9);
 
   const filtered = orderedProducts.filter(p => {
     if (filterCategory !== "all" && p.category !== filterCategory) return false;
@@ -169,10 +175,15 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   function handleEditSaved(updatedProduct) {
     const scrollY = window.scrollY;
+    // Capture current display order so the edited product stays in place
+    const currentOrder = orderedProducts.map(p => p.id);
     if (updatedProduct?.id) {
       const exists = products.some(p => String(p.id) === String(updatedProduct.id));
       if (exists) updateLocalRecord(updatedProduct.id, updatedProduct);
       else addLocalRecord(updatedProduct);
+      // Persist current order so sortByStoredOrder keeps positions after re-render
+      saveSortOrder(currentOrder);
+      setSortVersion(v => v + 1);
     } else { refetchProducts(); }
     setEditProduct(null);
     requestAnimationFrame(() => window.scrollTo(0, scrollY));
@@ -304,18 +315,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         </div>
       </div>
 
-      {/* Featured Products */}
-      {featured.length > 0 && (
-        <section className="mb-10">
-          <div className="mb-4">
-            <p className="text-xs font-bold text-indigo-600 uppercase">Handpicked</p>
-            <h2 className="text-2xl font-bold text-gray-900">Featured Products</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {featured.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
-          </div>
-        </section>
-      )}
+
 
       {/* Shop by Category */}
       <section className="mb-10">
