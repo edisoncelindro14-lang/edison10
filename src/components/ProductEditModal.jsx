@@ -157,15 +157,6 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Network */}
-          <div>
-            <Label>Network</Label>
-            <select value={form.network} onChange={e => update("network", e.target.value)}
-              className="w-full h-10 px-3 border border-gray-200 rounded-lg">
-              {NETWORKS.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-
           {/* Description */}
           <div>
             <Label>Description</Label>
