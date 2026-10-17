@@ -18,7 +18,14 @@ function sortByStoredOrder(products) {
   if (!order.length) return products;
   const indexMap = {};
   order.forEach((id, i) => { indexMap[id] = i; });
-  return [...products].sort((a, b) => (indexMap[a.id] ?? 9999) - (indexMap[b.id] ?? 9999));
+  return [...products].sort((a, b) => {
+    const aIdx = indexMap[a.id];
+    const bIdx = indexMap[b.id];
+    if (aIdx !== undefined && bIdx !== undefined) return aIdx - bIdx;
+    if (aIdx !== undefined) return -1;
+    if (bIdx !== undefined) return 1;
+    return 0; // preserve original order for products not in stored sort
+  });
 }
 
 function StarRating({ rating, count }) {
