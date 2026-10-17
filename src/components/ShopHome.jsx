@@ -9,24 +9,7 @@ import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
-
-const SORT_ORDER_KEY = "kabaro_product_sort_order";
-function loadSortOrder() { try { return JSON.parse(localStorage.getItem(SORT_ORDER_KEY) || "[]"); } catch { return []; } }
-function saveSortOrder(ids) { localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(ids)); }
-function sortByStoredOrder(products) {
-  const order = loadSortOrder();
-  if (!order.length) return products;
-  const indexMap = {};
-  order.forEach((id, i) => { indexMap[id] = i; });
-  return [...products].sort((a, b) => {
-    const aIdx = indexMap[a.id];
-    const bIdx = indexMap[b.id];
-    if (aIdx !== undefined && bIdx !== undefined) return aIdx - bIdx;
-    if (aIdx !== undefined) return -1;
-    if (bIdx !== undefined) return 1;
-    return 0; // preserve original order for products not in stored sort
-  });
-}
+import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
 
 function StarRating({ rating, count }) {
   return (
@@ -135,7 +118,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const { data: members = [] } = useTable("members", { enabled: !readOnly });
   const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions", { enabled: !readOnly });
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products");
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
@@ -149,7 +132,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
   const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
-  const orderedProducts = useMemo(() => sortByStoredOrder(visibleProducts), [visibleProducts, sortVersion]);
+  const orderedProducts = useMemo(() => sortProductsByOrder(visibleProducts), [visibleProducts, sortVersion]);
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
@@ -175,14 +158,10 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   function handleEditSaved(updatedProduct) {
     const scrollY = window.scrollY;
-    // Capture current display order so the edited product stays in place
-    const currentOrder = orderedProducts.map(p => p.id);
     if (updatedProduct?.id) {
       const exists = products.some(p => String(p.id) === String(updatedProduct.id));
       if (exists) updateLocalRecord(updatedProduct.id, updatedProduct);
       else addLocalRecord(updatedProduct);
-      // Persist current order so sortByStoredOrder keeps positions after re-render
-      saveSortOrder(currentOrder);
       setSortVersion(v => v + 1);
     } else { refetchProducts(); }
     setEditProduct(null);
@@ -194,14 +173,21 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   function handleDrop(e, targetId) {
     e.preventDefault(); e.stopPropagation();
     if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return; }
-    const currentOrder = filtered.map(p => p.id);
-    const fromIdx = currentOrder.indexOf(draggedId);
-    const toIdx = currentOrder.indexOf(targetId);
+    // Reorder within the full product list (not just the filtered view) so the
+    // saved sort_order is consistent across every device and deployment.
+    const fullOrder = orderedProducts.map(p => p.id);
+    const fromIdx = fullOrder.indexOf(draggedId);
+    const toIdx = fullOrder.indexOf(targetId);
     if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return; }
-    const newOrder = [...currentOrder]; newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, draggedId);
-    const stored = loadSortOrder().filter(id => !newOrder.includes(id));
-    saveSortOrder([...newOrder, ...stored]);
+    const newOrder = [...fullOrder]; newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, draggedId);
+    // Optimistically reflect the new order locally, then persist to the server.
+    newOrder.forEach((id, i) => updateLocalRecord(id, { sort_order: i }));
     setDraggedId(null); setDragOverId(null); setSortVersion(v => v + 1);
+    persistProductOrder(newOrder).catch(err => {
+      console.error("Failed to persist product order:", err);
+      toast.error("Could not save product order — showing the last saved layout.");
+      refetchProducts();
+    });
   }
 
   async function handleCheckout(paymentMethod) {
