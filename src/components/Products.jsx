@@ -267,7 +267,7 @@ export default function Products() {
                   <p className="font-bold text-sm text-gray-900">{p.name}</p>
                   {p.joytel_enabled && (
                     <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                      <Radio className="w-2.5 h-2.5" /> JoyTel
+                      <Radio className="w-2.5 h-2.5" /> JoyTel {p.joytel_type === 1 ? "SIM" : "eSIM"}
                     </span>
                   )}
                 </div>

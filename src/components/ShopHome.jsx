@@ -83,7 +83,7 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
           <p className="font-bold text-sm text-gray-900 truncate">{product.name}</p>
           {product.joytel_enabled && (
             <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-              <Radio className="w-2.5 h-2.5" /> JoyTel
+              <Radio className="w-2.5 h-2.5" /> JoyTel {product.joytel_type === 1 ? "SIM" : "eSIM"}
             </span>
           )}
         </div>
