@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star } from "lucide-react";
+import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
@@ -174,6 +174,25 @@ export default function ProductDetail({ productId }) {
           </div>
 
           {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{product.description}</p>}
+
+          {/* JoyTel order details */}
+          {product.joytel_enabled && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Radio className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-bold text-blue-700">JoyTel Product</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {product.joytel_product_code && (
+                  <div><span className="text-gray-500">Product Code:</span> <span className="font-medium text-gray-900">{product.joytel_product_code}</span></div>
+                )}
+                <div><span className="text-gray-500">Type:</span> <span className="font-medium text-gray-900">{product.joytel_type === 1 ? "Physical SIM" : "eSIM"}</span></div>
+                {product.joytel_warehouse && (
+                  <div><span className="text-gray-500">Warehouse:</span> <span className="font-medium text-gray-900">{product.joytel_warehouse}</span></div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Quantity */}
           <div className="mt-6">

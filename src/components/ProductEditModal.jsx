@@ -23,6 +23,10 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
     best_seller: product?.best_seller || false,
     has_discount: !!product?.discount_percent,
     discount_percent: product?.discount_percent || "",
+    joytel_enabled: product?.joytel_enabled || false,
+    joytel_product_code: product?.joytel_product_code || "",
+    joytel_type: product?.joytel_type || 3,
+    joytel_warehouse: product?.joytel_warehouse || "",
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(product?.image_url || "");
@@ -62,6 +66,10 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
         is_active: form.is_active,
         best_seller: form.best_seller,
         discount_percent: form.has_discount ? (parseFloat(form.discount_percent) || 0) : 0,
+        joytel_enabled: form.joytel_enabled,
+        joytel_product_code: form.joytel_enabled ? form.joytel_product_code.trim() : null,
+        joytel_type: form.joytel_enabled ? Number(form.joytel_type) || 3 : null,
+        joytel_warehouse: form.joytel_enabled ? form.joytel_warehouse.trim() : null,
       };
 
       if (isEditing) {
@@ -205,6 +213,40 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
               <div>
                 <Label>Discount Percent (%)</Label>
                 <Input type="number" min="0" max="100" value={form.discount_percent} onChange={e => update("discount_percent", e.target.value)} placeholder="e.g. 20" />
+              </div>
+            )}
+          </div>
+
+          {/* JoyTel order details */}
+          <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">JoyTel Product</p>
+                <p className="text-xs text-gray-500">Link this product to a JoyTel eSIM/SIM order</p>
+              </div>
+              <button onClick={() => update("joytel_enabled", !form.joytel_enabled)}
+                className={`relative w-12 h-6 rounded-full transition ${form.joytel_enabled ? "bg-blue-500" : "bg-gray-300"}`}>
+                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${form.joytel_enabled ? "left-6" : "left-0.5"}`} />
+              </button>
+            </div>
+            {form.joytel_enabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>JoyTel Product Code</Label>
+                  <Input value={form.joytel_product_code} onChange={e => update("joytel_product_code", e.target.value)} placeholder="e.g. ESIM-GLOBAL-5GB" />
+                </div>
+                <div>
+                  <Label>Type</Label>
+                  <select value={form.joytel_type} onChange={e => update("joytel_type", Number(e.target.value))}
+                    className="w-full h-10 px-3 border border-gray-200 rounded-lg">
+                    <option value={3}>eSIM</option>
+                    <option value={1}>Physical SIM</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Warehouse</Label>
+                  <Input value={form.joytel_warehouse} onChange={e => update("joytel_warehouse", e.target.value)} placeholder="e.g. PH-WH01" />
+                </div>
               </div>
             )}
           </div>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical } from "lucide-react";
+import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
@@ -263,8 +263,21 @@ export default function Products() {
                 )}
               </div>
               <div className="p-4">
-                <p className="font-bold text-sm text-gray-900">{p.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-sm text-gray-900">{p.name}</p>
+                  {p.joytel_enabled && (
+                    <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                      <Radio className="w-2.5 h-2.5" /> JoyTel
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 mt-1">{p.description || p.network}</p>
+                {p.joytel_enabled && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {p.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {p.joytel_product_code}</p>}
+                    <p className="text-[10px] text-gray-400">{p.joytel_type === 1 ? "Physical SIM" : "eSIM"}{p.joytel_warehouse ? ` · ${p.joytel_warehouse}` : ""}</p>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mt-3">
                   <div>
                     <p className="text-xl font-extrabold text-orange-600">{money(getFinalPrice(p))}</p>
