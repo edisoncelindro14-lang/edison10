@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon } from "lucide-react";
+import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
@@ -79,8 +79,21 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
       </div>
       <div className="p-3">
         <span className="text-[10px] text-gray-400 uppercase font-medium">{product.category}</span>
-        <p className="font-bold text-sm text-gray-900 truncate">{product.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="font-bold text-sm text-gray-900 truncate">{product.name}</p>
+          {product.joytel_enabled && (
+            <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+              <Radio className="w-2.5 h-2.5" /> JoyTel
+            </span>
+          )}
+        </div>
         <div className="mt-1"><StarRating rating={rating} count={reviewCount} /></div>
+        {product.joytel_enabled && (
+          <div className="mt-1 space-y-0.5">
+            {product.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {product.joytel_product_code}</p>}
+            <p className="text-[10px] text-gray-400">{product.joytel_type === 1 ? "Physical SIM" : "eSIM"}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
+          </div>
+        )}
         <div className="flex items-center justify-between mt-2">
           <div>
             <p className="text-lg font-extrabold text-orange-600">{money(finalPrice)}</p>
