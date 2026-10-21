@@ -123,7 +123,8 @@ export default function Products() {
     if (!currentMember) return;
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
-    if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
+    const hasJoytel = cart.some(i => i.joytel_enabled);
+    if ((hasLoad || hasJoytel) && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load / JoyTel order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
@@ -132,7 +133,7 @@ export default function Products() {
     try {
       if (isWallet) {
         for (const item of cart) {
-          const details = item.category === "load"
+          const details = item.category === "load" || item.joytel_enabled
             ? `${item.name} x${item.qty} → ${mobileNumber}`
             : `${item.name} x${item.qty} → ${address}`;
           const tx = await createRecord("transactions", {
@@ -156,7 +157,7 @@ export default function Products() {
             member_id: currentMember.id,
             purpose: "purchase",
             items: cart.map(i => ({ name: i.name, price: i.price, qty: i.qty, category: i.category })),
-            delivery: cart.some(i => i.category === "load") ? mobileNumber : address,
+            delivery: (cart.some(i => i.category === "load") || hasJoytel) ? mobileNumber : address,
           }),
         });
         const data = await res.json();
@@ -332,10 +333,10 @@ export default function Products() {
                       </div>
                     ))}
                   </div>
-                  {cart.some(i => i.category === "load") && (
+                  {cart.some(i => i.category === "load" || i.joytel_enabled) && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">Mobile Number (for load)</label>
+                        <label className="text-sm font-medium text-gray-700">Mobile Number {cart.some(i => i.joytel_enabled) ? "(for JoyTel order)" : "(for load)"}</label>
                         <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-orange-600 hover:underline">Use a different number</button>
                       </div>
                       <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
