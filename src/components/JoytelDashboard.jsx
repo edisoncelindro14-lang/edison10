@@ -81,6 +81,7 @@ export default function JoytelDashboard() {
   const [orderCode, setOrderCode] = useState("");
   const [receiveName, setReceiveName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [productCode, setProductCode] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [warehouse, setWarehouse] = useState("");
@@ -96,6 +97,8 @@ export default function JoytelDashboard() {
   // Recharge state
   const [rechargeCode, setRechargeCode] = useState("");
   const [rechargeProductCode, setRechargeProductCode] = useState("");
+  const [rechargeSnCode, setRechargeSnCode] = useState("");
+  const [rechargeDays, setRechargeDays] = useState("1");
 
   async function callApi(name, fn) {
     setLoading(name);
@@ -115,9 +118,9 @@ export default function JoytelDashboard() {
   async function handleSubmitOrder() {
     const ts = Date.now();
     const tid = orderTid || `ORD-${ts}`;
-    const itemList = [{ productCode: productCode || "TEST001", quantity: Number(quantity) || 1 }];
+    const itemList = [{ productCode: productCode || "eSIM-test", quantity: Number(quantity) || 1 }];
     await callApi("submitOrder", () => submitJoytelOrder({
-      type: Number(orderType), receiveName, phone, orderTid: tid,
+      type: Number(orderType), receiveName, phone, email, orderTid: tid,
       warehouse, itemList,
     }));
   }
@@ -127,7 +130,7 @@ export default function JoytelDashboard() {
   }
 
   async function handleServiceList() {
-    await callApi("serviceList", () => queryServiceOrderList({}));
+    await callApi("serviceList", () => queryServiceOrderList({ cid }));
   }
 
   async function handleQueryCoupon() {
@@ -166,7 +169,7 @@ export default function JoytelDashboard() {
   async function handleCardRecharge() {
     const ts = Date.now();
     const tid = orderTid || `RCH-${ts}`;
-    const itemList = [{ productCode: rechargeProductCode || "TEST001", quantity: Number(quantity) || 1 }];
+    const itemList = [{ productCode: rechargeProductCode || "CZ-test", snCode: rechargeSnCode, days: Number(rechargeDays) || 1 }];
     await callApi("recharge", () => submitCardRecharge({ orderTid: tid, itemList }));
   }
 
@@ -231,6 +234,10 @@ export default function JoytelDashboard() {
               <div>
                 <Label>Phone</Label>
                 <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="09123456789" />
+              </div>
+              <div>
+                <Label>Email (required by JoyTel)</Label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="customer@example.com" />
               </div>
               <div>
                 <Label>Product Code</Label>
@@ -381,8 +388,12 @@ export default function JoytelDashboard() {
                 <Input value={rechargeProductCode} onChange={e => setRechargeProductCode(e.target.value)} placeholder="e.g. RECHARGE-5GB" />
               </div>
               <div>
-                <Label>Quantity</Label>
-                <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} />
+                <Label>SN Code (printed on the card)</Label>
+                <Input value={rechargeSnCode} onChange={e => setRechargeSnCode(e.target.value)} placeholder="Card serial number" />
+              </div>
+              <div>
+                <Label>Days</Label>
+                <Input type="number" min="1" value={rechargeDays} onChange={e => setRechargeDays(e.target.value)} />
               </div>
             </div>
             <Button onClick={handleCardRecharge} disabled={loading === "recharge"} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white">

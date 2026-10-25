@@ -7,7 +7,7 @@ const RSP_PATH = '/rsp';
 
 /**
  * JoyTel RSP+ API handler.
- * Auth headers: AppId, AppSecret, TransId, Timestamp, Ciphertext
+ * Auth headers: AppId, TransId, Timestamp, Ciphertext
  * where Ciphertext = MD5(AppId + TransId + Timestamp + AppSecret)
  */
 export default async function handler(req, res) {
@@ -25,11 +25,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { endpoint, ...params } = req.body;
+    const { endpoint, transId: callerTransId, ...params } = req.body || {};
     if (!endpoint) return res.status(400).json({ error: 'endpoint is required' });
 
-    // Generate auth headers
-    const transId = `${appId}-${Date.now()}`;
+    // Generate auth headers. TransId must be unique per request (max 50 chars).
+    // coupon/redeem results come back to our notify URL carrying this same transId.
+    const transId = String(callerTransId || `${appId}-${Date.now()}`).slice(0, 50);
     const timestamp = String(Date.now());
     const ciphertext = createHash('md5').update(appId + transId + timestamp + appSecret, 'utf8').digest('hex');
 
@@ -40,7 +41,6 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'X-Proxy-Token': PROXY_TOKEN,
         'AppId': appId,
-        'AppSecret': appSecret,
         'TransId': transId,
         'Timestamp': timestamp,
         'Ciphertext': ciphertext,

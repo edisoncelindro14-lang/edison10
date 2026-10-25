@@ -82,6 +82,8 @@ export default function JoytelTest() {
   const [orderCode, setOrderCode] = useState("");
   const [receiveName, setReceiveName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [snCode, setSnCode] = useState("");
   const [productCode, setProductCode] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [rechargeCode, setRechargeCode] = useState("");
@@ -97,12 +99,14 @@ export default function JoytelTest() {
       let res;
       const ts = Date.now();
       const tid = orderTid || `TEST-${ts}`;
-      const itemList = [{ productCode: productCode || "TEST001", quantity: Number(quantity) || 1 }];
+      const itemList = whAction === "cardRecharge"
+        ? [{ productCode: productCode || "CZ-test", snCode, days: 1 }]
+        : [{ productCode: productCode || "eSIM-test", quantity: Number(quantity) || 1 }];
 
       switch (whAction) {
         case "customerOrder":
           res = await submitJoytelOrder({
-            type: 3, receiveName: receiveName || "Test", phone: phone || "09000000000",
+            type: 3, receiveName: receiveName || "Test", phone: phone || "09000000000", email: email || "test@example.com",
             orderTid: tid, warehouse: "", itemList,
           });
           break;
@@ -110,7 +114,7 @@ export default function JoytelTest() {
           res = await queryJoytelOrder({ orderCode, orderTid: tid });
           break;
         case "serviceOrderListQuery":
-          res = await queryServiceOrderList({ orderCode, orderTid: tid });
+          res = await queryServiceOrderList({ cid });
           break;
         case "cardRecharge":
           res = await submitCardRecharge({ orderTid: tid, itemList });
@@ -211,6 +215,10 @@ export default function JoytelTest() {
                       <Label>Phone</Label>
                       <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="09000000000" />
                     </div>
+                    <div>
+                      <Label>Email</Label>
+                      <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="test@example.com" />
+                    </div>
                   </>
                 )}
                 <div>
@@ -228,7 +236,7 @@ export default function JoytelTest() {
               </div>
             )}
 
-            {(whAction === "customerOrderQuery" || whAction === "serviceOrderListQuery") && (
+            {whAction === "customerOrderQuery" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Order Code</Label>
@@ -238,6 +246,20 @@ export default function JoytelTest() {
                   <Label>Order TID (optional)</Label>
                   <Input value={orderTid} onChange={e => setOrderTid(e.target.value)} placeholder="Transaction ID" />
                 </div>
+              </div>
+            )}
+
+            {whAction === "serviceOrderListQuery" && (
+              <div>
+                <Label>CID (eSIM profile or OTA card)</Label>
+                <Input value={cid} onChange={e => setCid(e.target.value)} placeholder="898620003xxxxxxx" />
+              </div>
+            )}
+
+            {whAction === "cardRecharge" && (
+              <div>
+                <Label>SN Code (printed on the OTA card)</Label>
+                <Input value={snCode} onChange={e => setSnCode(e.target.value)} placeholder="Card serial number (days fixed to 1 for CZ-test)" />
               </div>
             )}
 
