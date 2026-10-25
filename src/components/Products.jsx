@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical } from "lucide-react";
+import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, createRecord } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
@@ -123,7 +123,8 @@ export default function Products() {
     if (!currentMember) return;
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
-    if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
+    const hasJoytel = cart.some(i => i.joytel_enabled);
+    if ((hasLoad || hasJoytel) && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load / JoyTel order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
@@ -132,7 +133,7 @@ export default function Products() {
     try {
       if (isWallet) {
         for (const item of cart) {
-          const details = item.category === "load"
+          const details = item.category === "load" || item.joytel_enabled
             ? `${item.name} x${item.qty} → ${mobileNumber}`
             : `${item.name} x${item.qty} → ${address}`;
           const tx = await createRecord("transactions", {
@@ -156,7 +157,7 @@ export default function Products() {
             member_id: currentMember.id,
             purpose: "purchase",
             items: cart.map(i => ({ name: i.name, price: i.price, qty: i.qty, category: i.category })),
-            delivery: cart.some(i => i.category === "load") ? mobileNumber : address,
+            delivery: (cart.some(i => i.category === "load") || hasJoytel) ? mobileNumber : address,
           }),
         });
         const data = await res.json();
@@ -263,8 +264,21 @@ export default function Products() {
                 )}
               </div>
               <div className="p-4">
-                <p className="font-bold text-sm text-gray-900">{p.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-sm text-gray-900">{p.name}</p>
+                  {p.joytel_enabled && (
+                    <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                      <Radio className="w-2.5 h-2.5" /> JoyTel {p.joytel_type === 1 ? "SIM" : "eSIM"}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 mt-1">{p.description || p.network}</p>
+                {p.joytel_enabled && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {p.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {p.joytel_product_code}</p>}
+                    <p className="text-[10px] text-gray-400">{p.joytel_type === 1 ? "Physical SIM" : "eSIM"}{p.joytel_warehouse ? ` · ${p.joytel_warehouse}` : ""}</p>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mt-3">
                   <div>
                     <p className="text-xl font-extrabold text-orange-600">{money(getFinalPrice(p))}</p>
@@ -319,10 +333,10 @@ export default function Products() {
                       </div>
                     ))}
                   </div>
-                  {cart.some(i => i.category === "load") && (
+                  {cart.some(i => i.category === "load" || i.joytel_enabled) && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">Mobile Number (for load)</label>
+                        <label className="text-sm font-medium text-gray-700">Mobile Number {cart.some(i => i.joytel_enabled) ? "(for JoyTel order)" : "(for load)"}</label>
                         <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-orange-600 hover:underline">Use a different number</button>
                       </div>
                       <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
