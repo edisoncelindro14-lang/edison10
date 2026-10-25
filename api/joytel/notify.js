@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import qrNotify from "../_lib/joytel-qr-notify.js";
 
 // JoyTel NotifyBaseURL for RSP+ Endpoint
 // URL: https://kabaroload.vercel.app/notify/esim/esim-progress  (rewritten to /api/joytel/notify by vercel.json)
@@ -9,6 +10,9 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_A
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export default async function handler(req, res) {
+  // /notify/coupon/redeem is rewritten here with ?type=coupon-redeem (keeps us within the 12-function limit)
+  if (req.query?.type === "coupon-redeem") return qrNotify(req, res);
+
   if (req.method === "GET") {
     return res.status(200).json({ status: "ok", service: "joytel-notify" });
   }

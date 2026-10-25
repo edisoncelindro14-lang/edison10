@@ -4,7 +4,7 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/notify/coupon/redeem", "destination": "/api/joytel/notify-coupon-redeem" },
+    { "source": "/notify/coupon/redeem", "destination": "/api/joytel/notify?type=coupon-redeem" },
     { "source": "/notify/esim/esim-progress", "destination": "/api/joytel/notify" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

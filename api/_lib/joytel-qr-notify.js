@@ -1,10 +1,11 @@
-import { getSetting, saveSetting } from '../_lib/joytel-server.js';
+import { getSetting, saveSetting } from './joytel-server.js';
 
 /**
  * RSP+ "Coupon Redeem Result Notification".
  * JoyTel posts the eSIM QR code here after we call coupon/redeem.
  * Public URL (NotifyBaseUrl + path) must be exactly: https://<your-domain>/notify/coupon/redeem
- * (vercel.json rewrites that path to this function).
+ * (vercel.json rewrites that path to /api/joytel/notify?type=coupon-redeem, which calls this handler;
+ * it lives in _lib so it does not count as a separate Vercel serverless function).
  *
  * Body: { transId, resultCode, resultMesg, finishTime,
  *         data: { coupon, qrcodeType, qrcode, qrcodeContent, cid, salePlanName, salePlanDays, pin1, pin2, puk1, puk2, cfCode, ... } }

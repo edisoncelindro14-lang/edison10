@@ -162,7 +162,7 @@ mock.module('../api/_lib/joytel-server.js', {
 });
 
 const { default: orderCallback } = await import('../api/joytel/order-callback.js');
-const { default: qrNotify } = await import('../api/joytel/notify-coupon-redeem.js');
+const { default: qrNotify } = await import('../api/_lib/joytel-qr-notify.js');
 
 const callbackBody = {
   orderCode: 'DD-230311-1', orderTid: 'test0012026102612000000001', status: 4,
@@ -222,6 +222,13 @@ test('QR notification: saves the QR code on the order and answers 000/Success', 
   assert.equal(order.qrStatus, 'delivered');
   assert.equal(order.cid, '89852000010000000001');
   assert.equal(JSON.parse(store.get('joytel_qr_j6TR54H1')).pin1, '8568');
+});
+
+test('notify.js routes ?type=coupon-redeem to the QR handler', async () => {
+  const { default: notify } = await import('../api/joytel/notify.js');
+  const res = makeRes();
+  await notify({ method: 'POST', query: { type: 'coupon-redeem' }, body: { transId: 'nope', resultCode: '600' } }, res);
+  assert.deepEqual(res.body, { code: '000', mesg: 'Success' });
 });
 
 test('QR notification: a failure is matched through the transId', async () => {
