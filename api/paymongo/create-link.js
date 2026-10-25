@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { saveSetting } from "../_lib/joytel-server.js";
+import { isJoytelProduct, joytelPreflight } from "../_lib/joytel-fulfill.js";
+import { getFinalPrice, FALLBACK_PRODUCTS } from "../../src/lib/helpers.js";
 
 // Creates a PayMongo Payment Link for a wallet top-up and records a
 // pending conversion_requests row. The wallet is only credited once
@@ -28,7 +31,7 @@ export default async function handler(req, res) {
   }
 
   const { amount, member_id, purpose, items, delivery } = req.body || {};
-  const parsedAmount = parseFloat(amount);
+  let parsedAmount = parseFloat(amount);
   if (!parsedAmount || parsedAmount < 1) {
     return res.status(400).json({ error: "Amount must be at least ₱1" });
   }
@@ -40,13 +43,38 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "items is required for purchase payments" });
   }
 
+  // Purchases: when the cart lines carry product ids, take the prices from the database (not the browser)
+  // and check that JoyTel products can actually be ordered BEFORE the customer pays.
+  let cartItems = items;
+  let hasJoytelItem = false;
+  if (isPurchase && items.every(i => i.product_id)) {
+    const ids = [...new Set(items.map(i => String(i.product_id)))];
+    const { data: dbProducts } = await supabase.from("products").select("*").in("id", ids);
+    const byId = new Map((dbProducts || []).map(p => [String(p.id), p]));
+    const { data: member } = await supabase.from("members").select("id,username,full_name,email,phone").eq("id", member_id).maybeSingle();
+    cartItems = [];
+    for (const i of items) {
+      const product = byId.get(String(i.product_id)) || FALLBACK_PRODUCTS.find(p => String(p.id) === String(i.product_id));
+      const qty = Number.isInteger(i.qty) && i.qty > 0 ? i.qty : 1;
+      if (!product) return res.status(404).json({ error: "A product in your cart no longer exists" });
+      if (product.is_active === false) return res.status(400).json({ error: `${product.name} is not available` });
+      if (isJoytelProduct(product)) {
+        hasJoytelItem = true;
+        const problem = joytelPreflight(product, member, delivery);
+        if (problem) return res.status(400).json({ error: problem });
+      }
+      cartItems.push({ product_id: product.id, name: product.name, price: getFinalPrice(product), qty, category: product.category });
+    }
+    parsedAmount = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
+  }
+
   // For purchases, do NOT create pending transactions — the webhook will
   // create completed transactions once PayMongo confirms payment. The
   // order items are encoded in the PayMongo remarks so the webhook can
   // reconstruct them without relying on pre-existing rows.
   const amountInCentavos = Math.round(parsedAmount * 100);
   const remarks = isPurchase
-    ? `purpose:purchase|member_id:${member_id}|items:${encodeURIComponent(JSON.stringify(items))}|delivery:${encodeURIComponent(delivery || "")}`
+    ? `purpose:purchase|member_id:${member_id}|items:${encodeURIComponent(JSON.stringify(cartItems.map(({ product_id, ...rest }) => rest)))}|delivery:${encodeURIComponent(delivery || "")}`
     : `member_id:${member_id}`;
 
   try {
@@ -78,7 +106,16 @@ export default async function handler(req, res) {
     // Purchases already have their pending `transactions` rows created
     // above (server-side) — only wallet top-ups need a conversion_requests
     // row for the webhook to find and approve.
-    if (!isPurchase) {
+    if (isPurchase) {
+      // The webhook reads the cart (with product ids) from here once PayMongo confirms payment.
+      try {
+        await saveSetting(`purchase_intent_${linkId}`, { member_id, delivery: delivery || "", items: cartItems }, `Purchase intent ${link.reference_number}`);
+      } catch (e) {
+        console.error("purchase intent save error:", e.message);
+        // Without the saved cart the webhook could not place the JoyTel order after payment, so do not take payment.
+        if (hasJoytelItem) return res.status(500).json({ error: "Could not start the payment. Please try again." });
+      }
+    } else {
       const { error: dbError } = await supabase.from("conversion_requests").insert({
         member_id,
         amount: parsedAmount,

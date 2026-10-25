@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star, Radio } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, useCurrentMember, createRecord } from "../lib/useData";
+import { useTable, useCurrentMember } from "../lib/useData";
+import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { Button, Input } from "./ui";
@@ -22,7 +23,7 @@ export default function ProductDetail({ productId }) {
   const [editProduct, setEditProduct] = useState(null);
 
   const { data: members = [] } = useTable("members");
-  const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions");
+  const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions");
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord } = useTable("products");
   const { currentMember } = useCurrentMember(members);
 
@@ -73,7 +74,7 @@ export default function ProductDetail({ productId }) {
 
   async function handleBuyNow(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
-    if (hasLoad && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
+    if ((hasLoad || product.joytel_enabled) && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
@@ -81,9 +82,10 @@ export default function ProductDetail({ productId }) {
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        const tx = await createRecord("transactions", { member_id: currentMember.id, type: "withdrawal", amount: -total, description: details, status: "completed" });
-        addLocalTx(tx);
-        toast.success("Order placed! Paid from wallet.");
+        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], hasLoad || product.joytel_enabled ? mobileNumber : address);
+        out.transactions.forEach(addLocalTx);
+        summarizeOrders(out.orders, toast);
+        refetchTx();
         nav("/Orders");
       } else {
         const res = await fetch("/api/paymongo/create-link", {
@@ -93,8 +95,8 @@ export default function ProductDetail({ productId }) {
             amount: total,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: [{ name: product.name, price: finalPrice, qty, category: product.category }],
-            delivery: hasLoad ? mobileNumber : address,
+            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category }],
+            delivery: hasLoad || product.joytel_enabled ? mobileNumber : address,
           }),
         });
         const data = await res.json();
