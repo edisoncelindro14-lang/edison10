@@ -3,7 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical, Radio } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, useCurrentMember, createRecord } from "../lib/useData";
+import { payFromWallet, summarizeOrders } from "../lib/orders";
+import { useTable, useCurrentMember } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
@@ -28,7 +29,7 @@ export default function Products() {
   const [sortVersion, setSortVersion] = useState(0);
 
   const { data: members = [] } = useTable("members");
-  const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions");
+  const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions");
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
 
@@ -132,20 +133,16 @@ export default function Products() {
     setBuying(true);
     try {
       if (isWallet) {
-        for (const item of cart) {
-          const details = item.category === "load" || item.joytel_enabled
-            ? `${item.name} x${item.qty} → ${mobileNumber}`
-            : `${item.name} x${item.qty} → ${address}`;
-          const tx = await createRecord("transactions", {
-            member_id: currentMember.id,
-            type: "withdrawal",
-            amount: -(item.price * item.qty),
-            description: details,
-            status: "completed",
-          });
-          addLocalTx(tx);
-        }
-        toast.success("Order placed! Paid from wallet.");
+        const out = await payFromWallet(
+          currentMember.id,
+          cart.map(i => ({
+            product_id: i.id, qty: i.qty,
+            delivery: i.category === "load" || i.joytel_enabled ? mobileNumber : address,
+          })),
+        );
+        out.transactions.forEach(addLocalTx);
+        summarizeOrders(out.orders, toast);
+        refetchTx();
         clearCart();
         setCheckoutOpen(false);
       } else {
@@ -156,7 +153,7 @@ export default function Products() {
             amount: cartTotal,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: cart.map(i => ({ name: i.name, price: i.price, qty: i.qty, category: i.category })),
+            items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category })),
             delivery: (cart.some(i => i.category === "load") || hasJoytel) ? mobileNumber : address,
           }),
         });

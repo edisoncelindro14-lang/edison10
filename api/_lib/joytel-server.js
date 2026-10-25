@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { md5 } from './joytel-sign.js';
+import { md5, computeAutoGraph, newOrderTid, WAREHOUSE_PATHS } from './joytel-sign.js';
 
 /**
  * Server-side helpers shared by the JoyTel callback handlers.
@@ -14,7 +14,7 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY ||
   process.env.SUPABASE_ANON_KEY;
 
-export const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+export const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 
 export async function getSetting(key) {
   if (!supabase) return null;
@@ -69,4 +69,33 @@ export async function rspCall(endpoint, payload, transId) {
   let body;
   try { body = JSON.parse(text); } catch { body = { raw: text }; }
   return { transId: tid, status: res.status, body };
+}
+
+/**
+ * Call a Warehouse endpoint (orders / recharge) through the proxy.
+ * Injects customerCode, timestamp, orderTid (when missing) and autoGraph.
+ * Returns { status, body, request }.
+ */
+export async function warehouseCall(endpoint, params) {
+  const proxy = process.env.JOYTEL_PROXY_URL;
+  const token = process.env.JOYTEL_PROXY_TOKEN || 'kabaroload-proxy-2024';
+  const customerCode = process.env.JOYTEL_CUSTOMER_CODE;
+  const customerAuth = process.env.JOYTEL_CUSTOMER_AUTH;
+  if (!proxy || !customerCode || !customerAuth) throw new Error('JoyTel Warehouse is not configured');
+  const path = WAREHOUSE_PATHS[endpoint];
+  if (!path) throw new Error(`Unknown Warehouse endpoint: ${endpoint}`);
+
+  const p = { ...params, customerCode, timestamp: params.timestamp || Date.now() };
+  if (!p.orderTid && (endpoint === 'customerOrder' || endpoint === 'cardRecharge')) p.orderTid = newOrderTid(customerCode);
+  p.autoGraph = computeAutoGraph(endpoint, p, customerCode, customerAuth);
+
+  const res = await fetch(`${proxy}/warehouse${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Proxy-Token': token },
+    body: JSON.stringify(p),
+  });
+  const text = await res.text();
+  let body;
+  try { body = JSON.parse(text); } catch { body = { raw: text }; }
+  return { status: res.status, body, request: p };
 }

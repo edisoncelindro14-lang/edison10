@@ -1,5 +1,6 @@
 import { extractSnPins, ORDER_STATUS } from '../_lib/joytel-sign.js';
 import { getSetting, saveSetting, rspCall } from '../_lib/joytel-server.js';
+import { refundOrder } from '../_lib/joytel-fulfill.js';
 
 /**
  * JoyTel eSIM order callback (webhook).
@@ -89,6 +90,16 @@ export default async function handler(req, res) {
       }
     }
     await saveSetting(key, { ...record, redeem }, `JoyTel order callback ${ref}`);
+
+    // JoyTel could not deliver (0 = issue on order, -1 = cancelled): give the customer their money back.
+    if ((status === 0 || status === -1) && orderTid) {
+      try {
+        await refundOrder(orderTid);
+      } catch (e) {
+        console.error('Refund failed:', e.message);
+        return res.status(500).json({ error: 'Refund failed' }); // JoyTel resends, which retries the refund
+      }
+    }
 
     if (redeemFailed) {
       // Non-200 makes JoyTel resend the callback later, which retries the failed redeem.

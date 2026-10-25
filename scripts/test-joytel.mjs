@@ -154,6 +154,7 @@ mock.module('../api/_lib/joytel-server.js', {
     supabase: null,
     getSetting: async k => (store.has(k) ? JSON.parse(store.get(k)) : null),
     saveSetting: async (k, v) => { store.set(k, JSON.stringify(v)); },
+    warehouseCall: async () => { throw new Error('not used in these tests'); },
     rspCall: async (endpoint, payload, transId) => {
       rspCalls.push({ endpoint, payload, transId });
       return { transId, status: 200, body: rspResponder(endpoint, payload) };

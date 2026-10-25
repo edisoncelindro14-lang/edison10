@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import { createClient } from "@supabase/supabase-js";
+import { supabase, getSetting } from "../_lib/joytel-server.js";
+import { isJoytelProduct, paymongoOrderTid, placeJoytelFulfilment } from "../_lib/joytel-fulfill.js";
 
 // PayMongo calls this endpoint when a payment link is paid.
 // Register it in the PayMongo dashboard as:
@@ -10,13 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 // PayMongo signed — a JSON.parse/stringify round-trip of the body is
 // not guaranteed to reproduce those bytes.
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-// Use the service_role key so the webhook can read conversion_requests and
-// insert transactions regardless of RLS policies. The anon key has no auth
-// session, so RLS blocks its reads/writes — which is why paid top-ups stopped
-// reflecting in the wallet after the Supabase account change.
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+// The shared server client (service role key when available, so RLS cannot block the webhook).
 
 const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET;
 
@@ -69,6 +64,7 @@ export default async function handler(req, res) {
     const memberId = memberIdMatch ? memberIdMatch[1] : null;
     const linkId = eventData?.id;
     const isPurchase = remarks.startsWith("purpose:purchase");
+    let retryLater = false;
 
     if (isPurchase) {
       // Shop checkout paid via PayMongo — create the completed transactions
@@ -76,6 +72,23 @@ export default async function handler(req, res) {
       // the PayMongo reference number embedded in the description.
       const refTag = `Ref: ${referenceNumber || linkId}`;
       try {
+        // create-link saved the cart (with product ids) under the link id; the remarks only carry names and prices.
+        const intent = await getSetting(`purchase_intent_${linkId}`);
+        const itemsMatch = remarks.match(/items:([^|]+)/);
+        const deliveryMatch = remarks.match(/delivery:([^|]+)/);
+        const items = intent?.items || (itemsMatch ? JSON.parse(decodeURIComponent(itemsMatch[1])) : []);
+        const delivery = intent?.delivery ?? (deliveryMatch ? decodeURIComponent(deliveryMatch[1]) : "");
+
+        // Work out which lines are JoyTel products and their (deterministic) JoyTel order ids.
+        const ids = [...new Set(items.map(i => i.product_id).filter(Boolean))];
+        const { data: dbProducts } = ids.length ? await supabase.from("products").select("*").in("id", ids) : { data: [] };
+        const productById = new Map((dbProducts || []).map(p => [String(p.id), p]));
+        const lines = items.map((item, idx) => {
+          const product = item.product_id ? productById.get(String(item.product_id)) : null;
+          const joytel = isJoytelProduct(product);
+          return { item, idx, product, joytel, orderTid: joytel ? paymongoOrderTid(process.env.JOYTEL_CUSTOMER_CODE, referenceNumber || linkId, idx) : null };
+        });
+
         const { data: alreadyFulfilled } = await supabase
           .from("transactions")
           .select("id")
@@ -86,19 +99,15 @@ export default async function handler(req, res) {
         if (alreadyFulfilled && alreadyFulfilled[0]) {
           console.log(`Purchase ${refTag} already fulfilled — skipping duplicate delivery`);
         } else {
-          const itemsMatch = remarks.match(/items:([^|]+)/);
-          const deliveryMatch = remarks.match(/delivery:([^|]+)/);
-          const items = itemsMatch ? JSON.parse(decodeURIComponent(itemsMatch[1])) : [];
-          const delivery = deliveryMatch ? decodeURIComponent(deliveryMatch[1]) : "";
           let created = 0;
-          for (const item of items) {
+          for (const { item, orderTid } of lines) {
             const itemTotal = (item.price || 0) * (item.qty || 1);
             const details = `${item.name} x${item.qty || 1} → ${delivery || ""}`;
             const { error: txError } = await supabase.from("transactions").insert({
               member_id: memberId,
               type: "purchase",
               amount: -itemTotal,
-              description: `${details} | Pay to Kabaro | ${refTag}`,
+              description: `${details} | Pay to Kabaro${orderTid ? ` | JoyTel: ${orderTid}` : ""} | ${refTag}`,
               status: "completed",
             });
             if (txError) console.error("Purchase transaction insert error:", txError.message);
@@ -106,9 +115,31 @@ export default async function handler(req, res) {
           }
           console.log(`Purchase fulfilled: ${created} transaction(s) for link ${linkId} | ${refTag}`);
         }
+
+        // Place the JoyTel orders. Runs on every delivery of this webhook: the orderTid is derived from the
+        // payment, so a retry cannot create a second order, and a crash before this point is healed by the retry.
+        const joytelLines = lines.filter(l => l.joytel);
+        if (joytelLines.length) {
+          const { data: member } = await supabase.from("members").select("id,username,full_name,email,phone").eq("id", memberId).maybeSingle();
+          for (const l of joytelLines) {
+            const qty = l.item.qty || 1;
+            try {
+              const r = await placeJoytelFulfilment({
+                product: l.product, qty, member: member || { id: memberId }, delivery, orderTid: l.orderTid,
+                payment: { method: "paymongo", ref: referenceNumber || linkId, amount: (l.item.price || 0) * qty },
+              });
+              console.log(`JoyTel order ${l.orderTid}: ${r.ok ? "ok" : `failed (${r.error})`}${r.refunded ? " — refunded to wallet" : ""}`);
+            } catch (e) {
+              console.error(`JoyTel step crashed for ${l.orderTid}:`, e.message);
+              retryLater = true;
+            }
+          }
+        }
       } catch (err) {
         console.error("Purchase fulfillment error:", err.message);
       }
+      // 500 makes PayMongo deliver the event again; everything above is idempotent, so a retry is safe.
+      if (retryLater) return res.status(500).json({ error: "JoyTel step failed, retry" });
       return res.status(200).json({ received: true, type: eventType });
     }
 

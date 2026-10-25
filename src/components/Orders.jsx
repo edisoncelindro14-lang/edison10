@@ -110,6 +110,15 @@ export default function Orders() {
                       </div>
                       {(() => { const refPart = (o.description || "").split(" | ").find(p => p.startsWith("Ref:")); return refPart ? <p className="text-xs text-gray-400 font-mono">{refPart}</p> : null; })()}
                       <p className="text-sm text-gray-500">{formatDate(o.created_at || o.created_date)}</p>
+                      {joytelData?.refunded && (
+                        <p className="text-xs text-red-600">JoyTel could not deliver this order. The amount was refunded to your wallet.</p>
+                      )}
+                      {joytelData && !joytelData.refunded && !hasQR && joytelData.statusText === "unknown" && (
+                        <p className="text-xs text-amber-600">Waiting for JoyTel to confirm this order. Please contact the shop if it takes long.</p>
+                      )}
+                      {joytelData && !joytelData.refunded && !hasQR && joytelData.statusText !== "unknown" && joytelData.statusText !== "failed" && (
+                        <p className="text-xs text-blue-600">Your eSIM is being prepared. It will appear here shortly.</p>
+                      )}
                     </div>
                     <div className="text-right ml-4">
                       <p className="font-bold text-gray-900">{money(Math.abs(o.amount))}</p>

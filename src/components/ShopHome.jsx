@@ -3,7 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon, Radio } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, useCurrentMember, createRecord } from "../lib/useData";
+import { payFromWallet, summarizeOrders } from "../lib/orders";
+import { useTable, useCurrentMember } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
@@ -132,7 +133,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   useEffect(() => { setSearch(headerSearch); }, [headerSearch]);
 
   const { data: members = [] } = useTable("members", { enabled: !readOnly });
-  const { data: transactions = [], addLocalRecord: addLocalTx } = useTable("transactions", { enabled: !readOnly });
+  const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions", { enabled: !readOnly });
   const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
 
@@ -219,20 +220,16 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(true);
     try {
       if (isWallet) {
-        for (const item of cart) {
-          const details = item.category === "load" || item.joytel_enabled
-            ? `${item.name} x${item.qty} → ${mobileNumber}`
-            : `${item.name} x${item.qty} → ${address}`;
-          const tx = await createRecord("transactions", {
-            member_id: currentMember.id,
-            type: "withdrawal",
-            amount: -(item.price * item.qty),
-            description: details,
-            status: "completed",
-          });
-          addLocalTx(tx);
-        }
-        toast.success("Order placed! Paid from wallet.");
+        const out = await payFromWallet(
+          currentMember.id,
+          cart.map(i => ({
+            product_id: i.id, qty: i.qty,
+            delivery: i.category === "load" || i.joytel_enabled ? mobileNumber : address,
+          })),
+        );
+        out.transactions.forEach(addLocalTx);
+        summarizeOrders(out.orders, toast);
+        refetchTx();
         clearCart(); setCheckoutOpen(false);
       } else {
         const res = await fetch("/api/paymongo/create-link", {
@@ -242,7 +239,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             amount: cartTotal,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: cart.map(i => ({ name: i.name, price: i.price, qty: i.qty, category: i.category })),
+            items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category })),
             delivery: (hasLoad || hasJoytel) ? mobileNumber : address,
           }),
         });
