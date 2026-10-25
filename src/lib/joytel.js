@@ -1,119 +1,111 @@
 /**
  * JoyTel API integration service.
  * All calls go through server-side Vercel API routes to keep credentials secure.
+ * Reference: JoyTel API document R.20260113.01.
  */
 
 const WAREHOUSE_API = '/api/joytel/warehouse';
 const RSP_API = '/api/joytel/rsp';
 
+async function post(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+const warehouse = (endpoint, body) => post(WAREHOUSE_API, { endpoint, ...body });
+const rsp = (endpoint, body) => post(RSP_API, { endpoint, ...body });
+
+// ---------------------------------------------------------------------------
+// Warehouse system: eSIM orders and OTA card recharge
+// ---------------------------------------------------------------------------
+
 /**
- * Submit an eSIM or OTA SIM order to JoyTel.
- * @param {Object} order - { type, receiveName, phone, orderTid, warehouse, itemList: [{productCode, quantity}] }
- * @returns {Promise<Object>} JoyTel API response
+ * Submit an eSIM order. JoyTel answers with orderCode; the snPin (coupon) arrives
+ * on our order callback within ~30 seconds (replyType is forced to 1 server-side).
+ * @param {Object} order - { receiveName, phone, email, orderTid?, type?, itemList: [{productCode, quantity}] }
+ *   email, receiveName and phone are mandatory. orderTid is generated when omitted and must be unique.
  */
 export async function submitJoytelOrder(order) {
-  const res = await fetch(WAREHOUSE_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'customerOrder', replyType: 1, ...order }),
-  });
-  return res.json();
+  return warehouse('customerOrder', order);
 }
 
 /**
- * Query a JoyTel order status by orderCode or orderTid.
- * @param {Object} query - { orderCode?, orderTid? }
- * @returns {Promise<Object>} JoyTel API response with order details
+ * Query an order by orderCode or orderTid. status: 1 submitted, 2 validated,
+ * 3 waiting delivery, 4 delivered, 0 issue, -1 cancelled, -2 merged.
+ * Use this when the order callback has not arrived after ~1 minute.
  */
 export async function queryJoytelOrder(query) {
-  const res = await fetch(WAREHOUSE_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'customerOrderQuery', ...query }),
-  });
-  return res.json();
+  return warehouse('customerOrderQuery', query);
 }
 
 /**
- * Query the service order list from JoyTel.
- * @param {Object} query - { orderCode?, orderTid? }
- * @returns {Promise<Object>} JoyTel API response
+ * List the service orders of a SIM (RSP+ system, by CID or coupon).
+ * @param {Object} query - { cid, coupon?, atCode? }
  */
 export async function queryServiceOrderList(query = {}) {
-  const res = await fetch(WAREHOUSE_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'serviceOrderListQuery', ...query }),
-  });
-  return res.json();
+  return rsp('sim/subscription/query', query);
 }
 
 /**
- * Submit an OTA card recharge order to JoyTel.
- * @param {Object} order - { orderTid, itemList: [{productCode, quantity}] }
- * @returns {Promise<Object>} JoyTel API response
+ * Submit an OTA card recharge. There is no callback; poll queryCardRecharge.
+ * @param {Object} order - { orderTid?, itemList: [{ productCode, snCode, days }] }
  */
 export async function submitCardRecharge(order) {
-  const res = await fetch(WAREHOUSE_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'cardRecharge', ...order }),
-  });
-  return res.json();
+  return warehouse('cardRecharge', order);
 }
 
 /**
- * Query an OTA card recharge status.
- * @param {Object} query - { orderTid?, rechargeCode? }
- * @returns {Promise<Object>} JoyTel API response
+ * Query a recharge order. Needs orderTid or rechargeCode.
  */
 export async function queryCardRecharge(query) {
-  const res = await fetch(WAREHOUSE_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'cardRechargeQuery', ...query }),
-  });
-  return res.json();
+  return warehouse('cardRechargeQuery', query);
 }
 
+// ---------------------------------------------------------------------------
+// RSP+ system: QR codes, eSIM status and usage
+// ---------------------------------------------------------------------------
+
 /**
- * Query eSIM coupon/QR code information from JoyTel RSP+ API.
- * @param {string} coupons - Coupon codes (snPin), separated by commas. Max 20 per batch.
- * @returns {Promise<Object>} JoyTel RSP+ API response with QR code and profile info
+ * Check coupon status (0 not activated, 1 unused, 2 used, 3 occupied, 4 invalidated, 5 expired, 6 invalid).
+ * This does NOT return a QR code. Use redeemCoupon for that.
+ * @param {string} coupons - snPin values separated by commas (max 20)
  */
 export async function queryCoupon(coupons) {
-  const res = await fetch(RSP_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'coupon/query', coupons }),
-  });
-  return res.json();
+  return rsp('coupon/query', { coupons });
 }
 
 /**
- * Query eSIM status and usage from JoyTel RSP+ API.
- * @param {string} cid - eSIM profile CID (898620003xxxxxxx format)
- * @returns {Promise<Object>} JoyTel RSP+ API response with status and usage data
+ * Redeem a coupon (snPin) to get the eSIM QR code. The request is acknowledged
+ * immediately; the QR code is delivered to /notify/coupon/redeem on our server.
+ * @param {string} coupon
+ * @param {0|1} qrcodeType - 0 = QR image URL, 1 = QR content text (LPA string)
  */
-export async function queryEsimStatus(cid) {
-  const res = await fetch(RSP_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'esim/status/query', cid }),
-  });
-  return res.json();
+export async function redeemCoupon(coupon, qrcodeType = 1) {
+  return rsp('coupon/redeem', { coupon, qrcodeType });
 }
 
 /**
- * Query eSIM profile information from JoyTel RSP+ API.
- * @param {string} cid - eSIM profile CID
- * @returns {Promise<Object>} JoyTel RSP+ API response with profile details
+ * Fallback when the QR notification does not arrive: look the redemption up by its transId.
  */
-export async function queryEsimProfile(cid) {
-  const res = await fetch(RSP_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'esim/profile/query', cid }),
-  });
-  return res.json();
+export async function getTransactionStatus(qTransId) {
+  return rsp('getTransactionStatus', { qTransId });
+}
+
+/** eSIM status (status 0/1/2 plus profile state). Provide a coupon, cid or atCode. */
+export async function queryEsimStatus(ids) {
+  return rsp('esim/status/query', typeof ids === 'string' ? { cid: ids } : ids);
+}
+
+/** eSIM profile details. Provide a coupon, cid or atCode. */
+export async function queryEsimProfile(ids) {
+  return rsp('esim/profile/query', typeof ids === 'string' ? { cid: ids } : ids);
+}
+
+/** eSIM data usage by coupon. */
+export async function queryEsimUsage(coupon) {
+  return rsp('esim/usage/query', { coupon });
 }

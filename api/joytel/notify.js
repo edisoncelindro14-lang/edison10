@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import qrNotify from "../_lib/joytel-qr-notify.js";
 
 // JoyTel NotifyBaseURL for RSP+ Endpoint
-// URL: https://kabaroload.vercel.app/api/joytel/notify
+// URL: https://kabaroload.vercel.app/notify/esim/esim-progress  (rewritten to /api/joytel/notify by vercel.json)
 // JoyTel sends RSP+ notifications here (e.g., data usage, bundle status, expiry alerts)
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -9,6 +10,9 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_A
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export default async function handler(req, res) {
+  // /notify/coupon/redeem is rewritten here with ?type=coupon-redeem (keeps us within the 12-function limit)
+  if (req.query?.type === "coupon-redeem") return qrNotify(req, res);
+
   if (req.method === "GET") {
     return res.status(200).json({ status: "ok", service: "joytel-notify" });
   }
@@ -41,12 +45,8 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({
-      received: true,
-      iccid: iccid || null,
-      eventType: eventType || null,
-      timestamp: new Date().toISOString(),
-    });
+    // JoyTel expects {"code":"000","mesg":"success"} for RSP+ notifications
+    return res.status(200).json({ code: "000", mesg: "success" });
   } catch (err) {
     console.error("JoyTel Notify Error:", err);
     return res.status(500).json({ error: "Internal server error" });

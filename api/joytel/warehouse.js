@@ -1,61 +1,18 @@
-import { createHash } from 'crypto';
+import { computeAutoGraph, newOrderTid, WAREHOUSE_PATHS } from '../_lib/joytel-sign.js';
 
-// Route through the sandbox proxy (IP whitelisted by JoyTel) instead of direct calls
+// Route through the proxy (fixed IP whitelisted by JoyTel) instead of direct calls
 const PROXY_BASE = process.env.JOYTEL_PROXY_URL;
 const PROXY_TOKEN = process.env.JOYTEL_PROXY_TOKEN || 'kabaroload-proxy-2024';
-const WAREHOUSE_PATH = '/warehouse/customerApi';
-
-function sha1(str) {
-  return createHash('sha1').update(str, 'utf8').digest('hex');
-}
 
 /**
- * Compute autoGraph for JoyTel Warehouse API based on endpoint.
- * The autoGraph is a SHA-1 hash of concatenated request parameters.
+ * JoyTel Warehouse API (orders and OTA card recharge).
+ * Endpoints (JoyTel document R.20260113.01):
+ *   customerOrder       POST /customerApi/customerOrder
+ *   customerOrderQuery  POST /customerApi/customerOrder/query
+ *   cardRecharge        POST /joyRechargeApi/rechargeOrder
+ *   cardRechargeQuery   POST /joyRechargeApi/rechargeOrder/query
+ * The "service order list" is an RSP+ call (sim/subscription/query), see /api/joytel/rsp.
  */
-function computeAutoGraph(endpoint, params, customerCode, customerAuth) {
-  const ts = String(params.timestamp);
-
-  switch (endpoint) {
-    case 'customerOrder': {
-      // SHA-1(customerCode + customerAuth + warehouse + type + orderTid + receiveName + phone + timestamp + itemList)
-      const warehouse = params.warehouse || '';
-      const type = String(params.type ?? '');
-      const orderTid = params.orderTid || '';
-      const receiveName = params.receiveName || '';
-      const phone = params.phone || '';
-      const itemList = (params.itemList || [])
-        .map(item => (item.productCode || '') + String(item.quantity ?? ''))
-        .join('');
-      return sha1(customerCode + customerAuth + warehouse + type + orderTid + receiveName + phone + ts + itemList);
-    }
-    case 'customerOrderQuery':
-    case 'serviceOrderListQuery': {
-      // SHA-1(customerCode + customerAuth + orderCode + orderTid + timestamp)
-      const orderCode = params.orderCode || '';
-      const orderTid = params.orderTid || '';
-      return sha1(customerCode + customerAuth + orderCode + orderTid + ts);
-    }
-    case 'cardRecharge': {
-      // SHA-1(customerCode + customerAuth + timestamp + itemList + orderTid)
-      const itemList = (params.itemList || [])
-        .map(item => (item.productCode || '') + String(item.quantity ?? ''))
-        .join('');
-      const orderTid = params.orderTid || '';
-      return sha1(customerCode + customerAuth + ts + itemList + orderTid);
-    }
-    case 'cardRechargeQuery': {
-      // SHA-1(customerCode + customerAuth + timestamp + rechargeCode + orderTid)
-      const rechargeCode = params.rechargeCode || '';
-      const orderTid = params.orderTid || '';
-      return sha1(customerCode + customerAuth + ts + rechargeCode + orderTid);
-    }
-    default:
-      // Default to order query format
-      return sha1(customerCode + customerAuth + (params.orderCode || '') + (params.orderTid || '') + ts);
-  }
-}
-
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -70,25 +27,55 @@ export default async function handler(req, res) {
   if (!customerCode || !customerAuth) {
     return res.status(500).json({ error: 'JoyTel Warehouse credentials not configured' });
   }
+  if (!PROXY_BASE) {
+    return res.status(500).json({ error: 'JOYTEL_PROXY_URL not configured' });
+  }
 
   try {
-    const { endpoint, ...params } = req.body;
+    const { endpoint, ...params } = req.body || {};
     if (!endpoint) return res.status(400).json({ error: 'endpoint is required' });
 
-    // Inject credentials
+    if (endpoint === 'serviceOrderListQuery') {
+      return res.status(400).json({
+        error: 'serviceOrderListQuery is an RSP+ call. Use /api/joytel/rsp with endpoint "sim/subscription/query" and a cid.',
+      });
+    }
+
+    const path = WAREHOUSE_PATHS[endpoint];
+    if (!path) return res.status(400).json({ error: `Unknown endpoint: ${endpoint}` });
+
+    // Inject credentials and timestamp
     params.customerCode = customerCode;
     if (!params.timestamp) params.timestamp = Date.now();
 
-    // For order submissions, request async callback (JoyTel sends coupon/snPin via callback)
     if (endpoint === 'customerOrder') {
+      // Mandatory fields per the JoyTel document
+      const missing = ['receiveName', 'phone', 'email'].filter(k => !params[k]);
+      if (missing.length) return res.status(400).json({ error: `Missing required field(s): ${missing.join(', ')}` });
+      if (!Array.isArray(params.itemList) || params.itemList.length === 0) {
+        return res.status(400).json({ error: 'itemList is required' });
+      }
+      if (params.itemList.length > 50) return res.status(400).json({ error: 'itemList is limited to 50 items' });
+      if (!params.type) params.type = 3; // 3 = eSIM order with snPin
+      // replyType 1: JoyTel sends the snPin to our order callback instead of e-mailing it
       params.replyType = 1;
     }
 
-    // Compute autoGraph
+    if (endpoint === 'cardRecharge') {
+      const bad = (params.itemList || []).some(i => !i.productCode || !i.snCode || !i.days);
+      if (!Array.isArray(params.itemList) || params.itemList.length === 0 || bad) {
+        return res.status(400).json({ error: 'Each recharge item needs productCode, snCode and days' });
+      }
+    }
+
+    // orderTid must be unique. Generate one when the caller did not provide it.
+    if ((endpoint === 'customerOrder' || endpoint === 'cardRecharge') && !params.orderTid) {
+      params.orderTid = newOrderTid(customerCode);
+    }
+
     params.autoGraph = computeAutoGraph(endpoint, params, customerCode, customerAuth);
 
-    // Forward through sandbox proxy (IP whitelisted by JoyTel)
-    const response = await fetch(`${PROXY_BASE}${WAREHOUSE_PATH}/${endpoint}`, {
+    const response = await fetch(`${PROXY_BASE}/warehouse${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
