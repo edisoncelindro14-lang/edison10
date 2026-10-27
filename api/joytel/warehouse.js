@@ -21,8 +21,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const customerCode = process.env.JOYTEL_CUSTOMER_CODE;
-  const customerAuth = process.env.JOYTEL_CUSTOMER_AUTH;
+  const customerCode = (process.env.JOYTEL_CUSTOMER_CODE || '').trim();
+  const customerAuth = (process.env.JOYTEL_CUSTOMER_AUTH || '').trim();
 
   if (!customerCode || !customerAuth) {
     return res.status(500).json({ error: 'JoyTel Warehouse credentials not configured' });
@@ -43,6 +43,10 @@ export default async function handler(req, res) {
 
     const path = WAREHOUSE_PATHS[endpoint];
     if (!path) return res.status(400).json({ error: `Unknown endpoint: ${endpoint}` });
+
+    // An empty warehouse must not be sent: JoyTel applies its default warehouse to it and then
+    // computes a different signature (code 1). Leaving it out matches the document's example.
+    if (!params.warehouse) delete params.warehouse;
 
     // Inject credentials and timestamp
     params.customerCode = customerCode;

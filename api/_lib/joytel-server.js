@@ -79,12 +79,13 @@ export async function rspCall(endpoint, payload, transId) {
 export async function warehouseCall(endpoint, params) {
   const proxy = process.env.JOYTEL_PROXY_URL;
   const token = process.env.JOYTEL_PROXY_TOKEN || 'kabaroload-proxy-2024';
-  const customerCode = process.env.JOYTEL_CUSTOMER_CODE;
-  const customerAuth = process.env.JOYTEL_CUSTOMER_AUTH;
+  const customerCode = (process.env.JOYTEL_CUSTOMER_CODE || '').trim();
+  const customerAuth = (process.env.JOYTEL_CUSTOMER_AUTH || '').trim();
   if (!proxy || !customerCode || !customerAuth) throw new Error('JoyTel Warehouse is not configured');
   const path = WAREHOUSE_PATHS[endpoint];
   if (!path) throw new Error(`Unknown Warehouse endpoint: ${endpoint}`);
 
+  if (!params.warehouse) { params = { ...params }; delete params.warehouse; }
   const p = { ...params, customerCode, timestamp: params.timestamp || Date.now() };
   if (!p.orderTid && (endpoint === 'customerOrder' || endpoint === 'cardRecharge')) p.orderTid = newOrderTid(customerCode);
   p.autoGraph = computeAutoGraph(endpoint, p, customerCode, customerAuth);
