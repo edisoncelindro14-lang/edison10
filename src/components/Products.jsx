@@ -9,6 +9,7 @@ import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calc
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
+import JoytelCatalogPicker from "./JoytelCatalogPicker";
 import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
 
 export default function Products() {
@@ -23,6 +24,7 @@ export default function Products() {
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editProduct, setEditProduct] = useState(null); // null = closed, {} = new, {id...} = editing
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -176,9 +178,12 @@ export default function Products() {
           <p className="text-gray-500 mt-2">Browse and purchase prepaid load and SIM cards for all networks.</p>
         </div>
         {canManage && (
-          <Button onClick={() => setEditProduct({})} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="w-4 h-4" /> Add Product
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setShowImport(true)} className="border-gray-200">Import JoyTel eSIMs</Button>
+            <Button onClick={() => setEditProduct({})} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Plus className="w-4 h-4" /> Add Product
+            </Button>
+          </div>
         )}
       </motion.div>
 
@@ -372,6 +377,10 @@ export default function Products() {
           </motion.div>
         </div>
       )}
+
+      <AnimatePresence>
+        {showImport && <JoytelCatalogPicker mode="import" onClose={() => setShowImport(false)} onImported={refetchProducts} />}
+      </AnimatePresence>
 
       {/* Product edit modal */}
       <AnimatePresence>
