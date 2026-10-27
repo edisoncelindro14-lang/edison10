@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { supabase, getSetting, saveSetting, warehouseCall } from './joytel-server.js';
 
 /**
@@ -13,14 +14,26 @@ import { supabase, getSetting, saveSetting, warehouseCall } from './joytel-serve
 
 export const orderKey = tid => `joytel_callback_${tid}`;
 
-/** orderTid for a wallet payment: customerCode + "W" + 20 hex chars of the transaction id. */
+/**
+ * orderTid = customerCode + 20 digits, the same shape JoyTel's own example uses
+ * (customerCode + yyyyMMddHHmmss + 6 digits). Digits only, at most 32 characters.
+ * The digits come from a hash of the payment, so the same payment always gives the same orderTid
+ * (replays cannot create a second order) and different payments never share one.
+ */
+function paymentDigits(seed) {
+  const n = BigInt('0x' + createHash('sha1').update(String(seed), 'utf8').digest('hex')) % 10n ** 20n;
+  return n.toString().padStart(20, '0');
+}
+const code = c => String(c || '').trim();
+
+/** orderTid for a wallet payment (from the withdrawal transaction id). */
 export function walletOrderTid(customerCode, txId) {
-  return `${customerCode}W${String(txId).replace(/-/g, '').slice(0, 20)}`.slice(0, 32);
+  return `${code(customerCode)}${paymentDigits(`wallet:${txId}`)}`.slice(0, 32);
 }
 
-/** orderTid for a PayMongo payment: customerCode + "P" + payment reference + item index. */
+/** orderTid for a PayMongo payment (from the payment reference and the cart line index). */
 export function paymongoOrderTid(customerCode, reference, index) {
-  return `${customerCode}P${String(reference).replace(/[^A-Za-z0-9]/g, '')}${index}`.slice(0, 32);
+  return `${code(customerCode)}${paymentDigits(`paymongo:${reference}:${index}`)}`.slice(0, 32);
 }
 
 export const isJoytelProduct = p => !!(p && p.joytel_enabled && p.joytel_product_code);

@@ -50,7 +50,7 @@ mock.module('../api/_lib/joytel-server.js', {
 
 const { default: walletPay } = await import('../api/orders/wallet-pay.js');
 const { default: orderCallback } = await import('../api/joytel/order-callback.js');
-const { placeJoytelFulfilment, refundOrder, paymongoOrderTid, orderKey } = await import('../api/_lib/joytel-fulfill.js');
+const { placeJoytelFulfilment, refundOrder, paymongoOrderTid, walletOrderTid, orderKey } = await import('../api/_lib/joytel-fulfill.js');
 const { calculateWalletBalance } = await import('../src/lib/helpers.js');
 
 const res = () => ({ statusCode: 200, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } });
@@ -84,7 +84,7 @@ test('wallet: JoyTel product is charged at the database price and ordered from J
   assert.equal(balance('m1'), 1000 - 900);                 // 500 less 10% = 450, x2
   const tx = r.body.transactions[0];
   assert.equal(tx.amount, -900);
-  assert.match(tx.description, /\| JoyTel: KAB1W[0-9a-f]{20}$/);
+  assert.match(tx.description, /\| JoyTel: KAB1[0-9]{20}$/);
   assert.equal(warehouseLog.length, 1);
   assert.equal(warehouseLog[0].endpoint, 'customerOrder');
   assert.deepEqual(warehouseLog[0].params.itemList, [{ productCode: 'eSIM-test', quantity: 2 }]);
@@ -149,6 +149,7 @@ test('wallet: bad input is rejected', async () => {
   assert.equal((await call({ member_id: 'm1', items: [{ product_id: 'nope', qty: 1 }] })).statusCode, 404);
 });
 
+const TID0 = paymongoOrderTid('KAB1', 'AbC123', 0);
 const product = () => db.products[0];
 const member = () => db.members[0];
 
@@ -235,10 +236,10 @@ test('webhook: a paid PayMongo purchase records the payment and places the JoyTe
   assert.equal(r.statusCode, 200);
   const tx = db.transactions.find(t => t.type === 'purchase');
   assert.equal(tx.amount, -450);
-  assert.match(tx.description, /Pay to Kabaro \| JoyTel: KAB1PAbC1230 \| Ref: AbC123/);
+  assert.match(tx.description, /Pay to Kabaro \| JoyTel: KAB1[0-9]{20} \| Ref: AbC123/);
   assert.equal(warehouseLog.length, 1);
-  assert.equal(warehouseLog[0].params.orderTid, 'KAB1PAbC1230');
-  assert.equal(record('joytel_callback_KAB1PAbC1230').statusText, 'submitted');
+  assert.equal(warehouseLog[0].params.orderTid, TID0);
+  assert.equal(record(`joytel_callback_${TID0}`).statusText, 'submitted');
 });
 
 test('webhook: PayMongo retrying the same payment never creates a second JoyTel order', async () => {
@@ -253,7 +254,7 @@ test('webhook: if JoyTel refuses, the customer is credited back in the wallet', 
   warehouse = () => ({ status: 200, body: { code: 4, message: 'Service not supported' } });
   await pay();
   assert.equal(balance('m1'), 1000 + 450);                   // purchase rows are not wallet money; the refund credit is
-  assert.equal(record('joytel_callback_KAB1PAbC1230').refunded, true);
+  assert.equal(record(`joytel_callback_${TID0}`).refunded, true);
 });
 
 test('webhook: without a saved intent (old payment link) the purchase is still recorded, with no JoyTel call', async () => {
@@ -274,9 +275,20 @@ test('replay: a JoyTel rejection whose refund failed the first time is refunded 
   sb.from = realFrom;
   assert.equal(first.statusCode, 500);                      // PayMongo will redeliver
   assert.equal(balance('m1'), 1000);
-  assert.equal(record('joytel_callback_KAB1PAbC1230').refunded, false);
+  assert.equal(record(`joytel_callback_${TID0}`).refunded, false);
   const second = await pay();                               // redelivery
   assert.equal(second.statusCode, 200);
   assert.equal(balance('m1'), 1450);
   assert.equal(warehouseLog.length, 1);                     // still only one JoyTel order
+});
+
+test('orderTid is customerCode + digits only, stable per payment, at most 32 characters', () => {
+  const a = walletOrderTid('10502', '3f2c8a1e-7b0d-4c11-9a55-0e6f1d2b3c4d');
+  assert.match(a, /^10502[0-9]{20}$/);
+  assert.equal(a, walletOrderTid('10502', '3f2c8a1e-7b0d-4c11-9a55-0e6f1d2b3c4d'));
+  assert.notEqual(a, walletOrderTid('10502', '3f2c8a1e-7b0d-4c11-9a55-0e6f1d2b3c4e'));
+  const p0 = paymongoOrderTid('10502', 'AbC123', 0);
+  assert.match(p0, /^10502[0-9]{20}$/);
+  assert.notEqual(p0, paymongoOrderTid('10502', 'AbC123', 1));
+  assert.ok(paymongoOrderTid('KAB1234567890', 'x', 0).length <= 32);
 });
