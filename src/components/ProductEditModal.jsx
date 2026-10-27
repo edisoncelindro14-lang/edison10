@@ -6,6 +6,8 @@ import { updateRecord, createRecord, deleteRecord } from "../lib/useData";
 import { uploadToCloudinary } from "../lib/cloudinary";
 import { NETWORKS, NETWORK_COLORS } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
+import JoytelCatalogPicker from "./JoytelCatalogPicker";
+import { productFromCatalog } from "../lib/joytelCatalog";
 
 export default function ProductEditModal({ product, onClose, onSaved }) {
   // Fallback products use string IDs like "fl-g50" — not real DB records.
@@ -31,10 +33,23 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(product?.image_url || "");
   const [saving, setSaving] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
   const fileRef = useRef(null);
 
   function update(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function applyCatalog(row) {
+    const p = productFromCatalog(row, "");
+    setForm(prev => ({
+      ...prev,
+      name: prev.name.trim() ? prev.name : p.name,
+      description: prev.description.trim() ? prev.description : p.description,
+      category: "esim", network: "JoyTel",
+      joytel_enabled: true, joytel_product_code: row.code, joytel_type: 3, joytel_warehouse: "",
+    }));
+    setShowCatalog(false);
   }
 
   function handleImageChange(e) {
@@ -233,6 +248,7 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>JoyTel Product Code</Label>
+                  <button type="button" onClick={() => setShowCatalog(true)} className="text-xs text-blue-600 mb-1">Browse JoyTel catalog</button>
                   <Input value={form.joytel_product_code} onChange={e => update("joytel_product_code", e.target.value)} placeholder="e.g. ESIM-GLOBAL-5GB" />
                 </div>
                 <div>
@@ -245,7 +261,7 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Warehouse</Label>
-                  <Input value={form.joytel_warehouse} onChange={e => update("joytel_warehouse", e.target.value)} placeholder="e.g. PH-WH01" />
+                  <Input value={form.joytel_warehouse} onChange={e => update("joytel_warehouse", e.target.value)} placeholder="Leave empty (JoyTel default)" />
                 </div>
               </div>
             )}
@@ -268,6 +284,7 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
           </div>
         </div>
       </motion.div>
+      {showCatalog && <JoytelCatalogPicker mode="pick" onClose={() => setShowCatalog(false)} onPick={applyCatalog} />}
     </motion.div>
   );
 }
