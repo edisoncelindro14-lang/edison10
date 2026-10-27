@@ -143,3 +143,9 @@ export function formatOrderNumber(order, index) {
   const num = String(100000 + (index + 1) * 137).padStart(6, "0");
   return `${prefix}-${num.slice(-6)}`;
 }
+
+
+/** JoyTel eSIMs are delivered by email: no mobile number needed. */
+export const isJoytelEsim = p => !!(p && p.joytel_enabled && Number(p.joytel_type || 3) === 3);
+/** Does the customer have to type a mobile number for this product? (e-load, or a JoyTel product that is not an eSIM) */
+export const needsMobile = p => !!p && (p.category === "load" || (p.joytel_enabled && !isJoytelEsim(p)));

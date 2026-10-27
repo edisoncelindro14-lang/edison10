@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { useTable, useCurrentMember } from "../lib/useData";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, needsMobile } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -60,6 +60,7 @@ export default function ProductDetail({ productId }) {
   const total = finalPrice * qty;
   const hasLoad = product.category === "load";
   const hasSim = product.category === "sim";
+  const hasMobile = needsMobile(product);
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
   const reviewCount = getProductReviewCount(product);
@@ -74,7 +75,7 @@ export default function ProductDetail({ productId }) {
 
   async function handleBuyNow(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
-    if ((hasLoad || product.joytel_enabled) && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
+    if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
@@ -82,7 +83,7 @@ export default function ProductDetail({ productId }) {
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], hasLoad || product.joytel_enabled ? mobileNumber : address);
+        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], hasMobile ? mobileNumber : (isJoytelEsim(product) ? "" : address));
         out.transactions.forEach(addLocalTx);
         summarizeOrders(out.orders, toast);
         refetchTx();
@@ -96,7 +97,7 @@ export default function ProductDetail({ productId }) {
             member_id: currentMember.id,
             purpose: "purchase",
             items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category }],
-            delivery: hasLoad || product.joytel_enabled ? mobileNumber : address,
+            delivery: hasMobile ? mobileNumber : (isJoytelEsim(product) ? "" : address),
           }),
         });
         const data = await res.json();
@@ -208,10 +209,10 @@ export default function ProductDetail({ productId }) {
 
           {/* Delivery details */}
           <div className="mt-6 space-y-4">
-            {hasLoad && (
+            {hasMobile && (
               <div>
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">Mobile Number (for load delivery)</label>
+                  <label className="text-sm font-medium text-gray-700">Mobile Number {hasLoad ? "(for load delivery)" : "(for your order)"}</label>
                   <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
                 </div>
                 <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />

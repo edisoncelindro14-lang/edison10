@@ -80,7 +80,7 @@ export default async function handler(req, res) {
       const txId = randomUUID();
       const joytel = isJoytelProduct(product);
       const orderTid = joytel ? walletOrderTid(process.env.JOYTEL_CUSTOMER_CODE, txId) : null;
-      const description = `${product.name} x${qty} → ${lineDelivery}${orderTid ? ` | JoyTel: ${orderTid}` : ''}`;
+      const description = `${product.name} x${qty} → ${lineDelivery || (joytel ? 'email' : '')}${orderTid ? ` | JoyTel: ${orderTid}` : ''}`;
 
       const { data: tx, error } = await supabase
         .from('transactions')
