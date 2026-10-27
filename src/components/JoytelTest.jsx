@@ -97,8 +97,8 @@ export default function JoytelTest() {
     setResult(null);
     try {
       let res;
-      const ts = Date.now();
-      const tid = orderTid || `TEST-${ts}`;
+      // Leave empty so the server builds customerCode+yyyyMMddHHmmss+6 digits (JoyTel rejects other formats with code 4)
+      const tid = orderTid.trim() || undefined;
       const itemList = whAction === "cardRecharge"
         ? [{ productCode: productCode || "CZ-test", snCode, days: 1 }]
         : [{ productCode: productCode || "eSIM-test", quantity: Number(quantity) || 1 }];
