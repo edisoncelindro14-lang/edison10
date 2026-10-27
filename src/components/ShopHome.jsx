@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, needsMobile } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -212,8 +212,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     if (!currentMember) { nav("/MemberLogin"); return; }
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
-    const hasJoytel = cart.some(i => i.joytel_enabled);
-    if ((hasLoad || hasJoytel) && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load / JoyTel order"); return; }
+    const hasMobile = cart.some(needsMobile);
+    if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for your order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
@@ -224,7 +224,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
           currentMember.id,
           cart.map(i => ({
             product_id: i.id, qty: i.qty,
-            delivery: i.category === "load" || i.joytel_enabled ? mobileNumber : address,
+            delivery: needsMobile(i) ? mobileNumber : (isJoytelEsim(i) ? "" : address),
           })),
         );
         out.transactions.forEach(addLocalTx);
@@ -240,7 +240,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             member_id: currentMember.id,
             purpose: "purchase",
             items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category })),
-            delivery: (hasLoad || hasJoytel) ? mobileNumber : address,
+            delivery: hasMobile ? mobileNumber : (cart.every(isJoytelEsim) ? "" : address),
           }),
         });
         const data = await res.json();
@@ -414,10 +414,10 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
                       </div>
                     ))}
                   </div>
-                  {cart.some(i => i.category === "load" || i.joytel_enabled) && (
+                  {cart.some(needsMobile) && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">Mobile Number {cart.some(i => i.joytel_enabled) ? "(for JoyTel order)" : "(for load)"}</label>
+                        <label className="text-sm font-medium text-gray-700">Mobile Number {cart.some(i => i.category === "load") ? "(for load)" : "(for your order)"}</label>
                         <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
                       </div>
                       <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />

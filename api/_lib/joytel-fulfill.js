@@ -38,11 +38,19 @@ export function paymongoOrderTid(customerCode, reference, index) {
 
 export const isJoytelProduct = p => !!(p && p.joytel_enabled && p.joytel_product_code);
 
-/** Phone to send to JoyTel: the delivery number when it looks like one, otherwise the member's phone. */
-export function pickPhone(delivery, member) {
+/** eSIM orders (JoyTel type 3) are delivered by email, so the customer does not have to give a mobile number. */
+export const isJoytelEsim = p => Number(p?.joytel_type || 3) === 3;
+
+/** JoyTel still requires a phone field. Used only when an eSIM customer has no number on file. */
+export const FALLBACK_PHONE = '09000000000';
+
+/** Phone to send to JoyTel: a number typed at checkout, else the member's profile phone, else (eSIM only) a placeholder. */
+export function pickPhone(delivery, member, product) {
   const d = String(delivery || '').trim();
   if (/^\+?[0-9][0-9\s-]{6,}$/.test(d)) return d.replace(/[\s-]/g, '');
-  return String(member?.phone || '').trim();
+  const profile = String(member?.phone || '').trim();
+  if (profile) return profile;
+  return isJoytelEsim(product) ? FALLBACK_PHONE : '';
 }
 
 /** Checks that a JoyTel purchase can be placed. Returns an error message or null. Call BEFORE taking payment. */
@@ -51,7 +59,7 @@ export function joytelPreflight(product, member, delivery) {
     return 'JoyTel ordering is not configured yet. Please contact the shop.';
   }
   if (!member?.email) return 'Please add your email address to your profile first. JoyTel sends your eSIM to it.';
-  if (!pickPhone(delivery, member)) return 'Please enter a mobile number for this order.';
+  if (!pickPhone(delivery, member, product)) return 'Please enter a mobile number for this order.';
   return null;
 }
 
@@ -92,7 +100,7 @@ export async function placeJoytelFulfilment({ product, qty, member, delivery, or
     const params = {
       type: product.joytel_type || 3,
       receiveName: member.full_name || member.username || 'Customer',
-      phone: pickPhone(delivery, member),
+      phone: pickPhone(delivery, member, product),
       email: member.email,
       orderTid,
       replyType: 1,

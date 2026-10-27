@@ -100,9 +100,9 @@ export default async function handler(req, res) {
           console.log(`Purchase ${refTag} already fulfilled — skipping duplicate delivery`);
         } else {
           let created = 0;
-          for (const { item, orderTid } of lines) {
+          for (const { item, orderTid, joytel } of lines) {
             const itemTotal = (item.price || 0) * (item.qty || 1);
-            const details = `${item.name} x${item.qty || 1} → ${delivery || ""}`;
+            const details = `${item.name} x${item.qty || 1} → ${delivery || (joytel ? "email" : "")}`;
             const { error: txError } = await supabase.from("transactions").insert({
               member_id: memberId,
               type: "purchase",

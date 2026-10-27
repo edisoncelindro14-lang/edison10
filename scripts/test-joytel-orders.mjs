@@ -292,3 +292,25 @@ test('orderTid is customerCode + digits only, stable per payment, at most 32 cha
   assert.notEqual(p0, paymongoOrderTid('10502', 'AbC123', 1));
   assert.ok(paymongoOrderTid('KAB1234567890', 'x', 0).length <= 32);
 });
+
+test('wallet: an eSIM needs no mobile number (profile phone, then a placeholder, is sent to JoyTel)', async () => {
+  const r = await call({ member_id: 'm1', items: [{ product_id: 'p-esim', qty: 1 }], delivery: '' });
+  assert.equal(r.statusCode, 200);
+  assert.equal(warehouseLog.at(-1).params.phone, '09170000000');      // member's profile phone
+  assert.match(r.body.transactions[0].description, /→ email \| JoyTel:/);
+
+  db.members.push({ id: 'm3', username: 'nophone', full_name: 'No Phone', email: 'n@x.com', phone: '' });
+  db.transactions.push({ id: 't3', member_id: 'm3', type: 'adjustment', amount: 1000, status: 'completed' });
+  const r2 = await call({ member_id: 'm3', items: [{ product_id: 'p-esim', qty: 1 }], delivery: '' });
+  assert.equal(r2.statusCode, 200);
+  assert.equal(warehouseLog.at(-1).params.phone, '09000000000');      // placeholder, only because it is an eSIM
+});
+
+test('wallet: a JoyTel product that is not an eSIM still needs a phone number', async () => {
+  db.products.push({ id: 'p-sim', name: 'Physical SIM', price: 100, category: 'sim', is_active: true, joytel_enabled: true, joytel_product_code: 'SIM-V1W', joytel_type: 1 });
+  db.members.push({ id: 'm4', username: 'x', full_name: 'X', email: 'x@x.com', phone: '' });
+  db.transactions.push({ id: 't4', member_id: 'm4', type: 'adjustment', amount: 1000, status: 'completed' });
+  const r = await call({ member_id: 'm4', items: [{ product_id: 'p-sim', qty: 1 }], delivery: '' });
+  assert.equal(r.statusCode, 400);
+  assert.match(r.body.error, /mobile number/i);
+});
