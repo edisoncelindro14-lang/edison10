@@ -53,10 +53,24 @@ export function pickPhone(delivery, member, product) {
   return isJoytelEsim(product) ? FALLBACK_PHONE : '';
 }
 
+/** joytel_type 9 = JOY SIM recharge (Card Recharge API): adds a data plan to a JOY SIM card identified by its serial number. */
+export const JOYTEL_RECHARGE_TYPE = 9;
+export const isJoytelRecharge = p => Number(p?.joytel_type) === JOYTEL_RECHARGE_TYPE;
+/** Daily plans ("500MB/day"): days = quantity. Total plans: always 1 day (JoyTel rule). */
+export const isDailyPlan = p => /\/\s*day/i.test(p?.name || '');
+/** Serial number printed on the JOY card board. */
+export const cleanSerial = v => String(v || '').replace(/\s+/g, '');
+export const validSerial = v => /^[A-Za-z0-9-]{6,32}$/.test(cleanSerial(v));
+
 /** Checks that a JoyTel purchase can be placed. Returns an error message or null. Call BEFORE taking payment. */
-export function joytelPreflight(product, member, delivery) {
+export function joytelPreflight(product, member, delivery, qty = 1) {
   if (!process.env.JOYTEL_CUSTOMER_CODE || !process.env.JOYTEL_CUSTOMER_AUTH || !process.env.JOYTEL_PROXY_URL) {
     return 'JoyTel ordering is not configured yet. Please contact the shop.';
+  }
+  if (isJoytelRecharge(product)) {
+    if (!validSerial(delivery)) return 'Please enter the serial number printed on your JOY SIM card.';
+    if (!isDailyPlan(product) && qty > 1) return 'This plan can only be bought one at a time.';
+    return null;
   }
   if (!member?.email) return 'Please add your email address to your profile first. JoyTel sends your eSIM to it.';
   if (!pickPhone(delivery, member, product)) return 'Please enter a mobile number for this order.';
@@ -88,6 +102,7 @@ export async function placeJoytelFulfilment({ product, qty, member, delivery, or
     productCode: product.joytel_product_code,
     qty,
     amount: payment.amount,
+    ...(isJoytelRecharge(product) ? { kind: 'recharge', snCode: cleanSerial(delivery), days: isDailyPlan(product) ? qty : 1 } : {}),
     payment: { method: payment.method, txId: payment.txId || null, ref: payment.ref || null },
     statusText: 'submitting',
     refunded: false,
@@ -97,23 +112,36 @@ export async function placeJoytelFulfilment({ product, qty, member, delivery, or
 
   let error = null;
   try {
-    const params = {
-      type: product.joytel_type || 3,
-      receiveName: member.full_name || member.username || 'Customer',
-      phone: pickPhone(delivery, member, product),
-      email: member.email,
-      orderTid,
-      replyType: 1,
-      itemList: [{ productCode: product.joytel_product_code, quantity: qty }],
-    };
-    if (product.joytel_warehouse) params.warehouse = product.joytel_warehouse;
+    let r, code;
+    if (record.kind === 'recharge') {
+      r = await warehouseCall('cardRecharge', {
+        orderTid,
+        itemList: [{ productCode: product.joytel_product_code, snCode: record.snCode, days: record.days }],
+      });
+      code = r.body?.code;
+      if (code === 0) {
+        await saveSetting(key, { ...record, statusText: 'submitted', rechargeCode: r.body?.data?.rechargeCode || null }, `JoyTel order ${orderTid}`);
+        return { ok: true, orderTid };
+      }
+    } else {
+      const params = {
+        type: product.joytel_type || 3,
+        receiveName: member.full_name || member.username || 'Customer',
+        phone: pickPhone(delivery, member, product),
+        email: member.email,
+        orderTid,
+        replyType: 1,
+        itemList: [{ productCode: product.joytel_product_code, quantity: qty }],
+      };
+      if (product.joytel_warehouse) params.warehouse = product.joytel_warehouse;
 
-    const r = await warehouseCall('customerOrder', params);
-    const code = r.body?.code;
+      r = await warehouseCall('customerOrder', params);
+      code = r.body?.code;
 
-    if (code === 0) {
-      await saveSetting(key, { ...record, statusText: 'submitted', orderCode: r.body?.data?.orderCode || null }, `JoyTel order ${orderTid}`);
-      return { ok: true, orderTid };
+      if (code === 0) {
+        await saveSetting(key, { ...record, statusText: 'submitted', orderCode: r.body?.data?.orderCode || null }, `JoyTel order ${orderTid}`);
+        return { ok: true, orderTid };
+      }
     }
 
     // JoyTel says this orderTid already exists (5 / 501): it WAS placed, so never refund here.
@@ -167,4 +195,33 @@ export async function refundOrder(orderTid) {
 
   await saveSetting(key, { ...record, refunded: true, refunded_at: new Date().toISOString() }, `JoyTel order ${orderTid}`);
   return { refunded: true };
+}
+
+/**
+ * Ask JoyTel how a JOY SIM recharge ended (there is no callback for recharges) and update the record.
+ * status 1 = success, 2 = failed (refund), 0 / 3 / 4 = still going. Safe to call repeatedly.
+ */
+export async function checkRecharge(orderTid) {
+  const key = orderKey(orderTid);
+  const record = await getSetting(key);
+  if (!record || record.kind !== 'recharge') return { found: false };
+  if (!['submitted', 'unknown'].includes(record.statusText) || record.refunded) return { found: true, statusText: record.statusText, refunded: !!record.refunded };
+
+  const r = await warehouseCall('cardRechargeQuery', { orderTid, rechargeCode: record.rechargeCode || '' });
+  if (r.body?.code !== 0) return { found: true, statusText: record.statusText, pending: true, message: r.body?.message };
+
+  const item = r.body?.data?.itemList?.[0];
+  if (!item) return { found: true, statusText: record.statusText, pending: true };
+
+  if (item.status === 1) {
+    await saveSetting(key, { ...record, statusText: 'delivered', rechargeStatus: 1, expireDate: item.productExpireDate || item.productExpireData || null, error: undefined }, `JoyTel order ${orderTid}`);
+    return { found: true, statusText: 'delivered' };
+  }
+  if (item.status === 2) {
+    const error = `JoyTel recharge failed: ${item.statusDesc || 'rejected'}`;
+    await saveSetting(key, { ...record, statusText: 'failed', rechargeStatus: 2, error }, `JoyTel order ${orderTid}`);
+    await refundOrder(orderTid);
+    return { found: true, statusText: 'failed', refunded: true, error };
+  }
+  return { found: true, statusText: record.statusText, pending: true, rechargeStatus: item.status };
 }

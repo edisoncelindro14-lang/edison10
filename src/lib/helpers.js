@@ -145,7 +145,12 @@ export function formatOrderNumber(order, index) {
 }
 
 
+/** joytel_type 9 = JOY SIM recharge: adds a data plan to a JOY SIM card, identified by the serial number printed on it. */
+export const isJoytelRecharge = p => !!(p && p.joytel_enabled && Number(p.joytel_type) === 9);
 /** JoyTel eSIMs are delivered by email: no mobile number needed. */
-export const isJoytelEsim = p => !!(p && p.joytel_enabled && Number(p.joytel_type || 3) === 3);
-/** Does the customer have to type a mobile number for this product? (e-load, or a JoyTel product that is not an eSIM) */
-export const needsMobile = p => !!p && (p.category === "load" || (p.joytel_enabled && !isJoytelEsim(p)));
+export const isJoytelEsim = p => !!(p && p.joytel_enabled && !isJoytelRecharge(p) && Number(p.joytel_type || 3) === 3);
+/** Does the customer have to type a mobile number? (e-load, or a JoyTel product that is neither an eSIM nor a recharge) */
+export const needsMobile = p => !!p && !isJoytelRecharge(p) && (p.category === "load" || (p.joytel_enabled && !isJoytelEsim(p)));
+/** What the delivery field carries for one cart line. */
+export const deliveryFor = (p, { mobile = "", address = "", serial = "" } = {}) =>
+  isJoytelRecharge(p) ? serial.trim() : needsMobile(p) ? mobile : isJoytelEsim(p) ? "" : address;

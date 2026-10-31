@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { supabase, getSetting } from "../_lib/joytel-server.js";
-import { isJoytelProduct, paymongoOrderTid, placeJoytelFulfilment } from "../_lib/joytel-fulfill.js";
+import { isJoytelProduct, isJoytelRecharge, cleanSerial, paymongoOrderTid, placeJoytelFulfilment } from "../_lib/joytel-fulfill.js";
 
 // PayMongo calls this endpoint when a payment link is paid.
 // Register it in the PayMongo dashboard as:
@@ -100,9 +100,9 @@ export default async function handler(req, res) {
           console.log(`Purchase ${refTag} already fulfilled — skipping duplicate delivery`);
         } else {
           let created = 0;
-          for (const { item, orderTid, joytel } of lines) {
+          for (const { item, orderTid, joytel, product } of lines) {
             const itemTotal = (item.price || 0) * (item.qty || 1);
-            const details = `${item.name} x${item.qty || 1} → ${delivery || (joytel ? "email" : "")}`;
+            const details = `${item.name} x${item.qty || 1} → ${isJoytelRecharge(product) ? cleanSerial(item.delivery || delivery) : (item.delivery || delivery || (joytel ? "email" : ""))}`;
             const { error: txError } = await supabase.from("transactions").insert({
               member_id: memberId,
               type: "purchase",
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
             const qty = l.item.qty || 1;
             try {
               const r = await placeJoytelFulfilment({
-                product: l.product, qty, member: member || { id: memberId }, delivery, orderTid: l.orderTid,
+                product: l.product, qty, member: member || { id: memberId }, delivery: l.item.delivery ?? delivery, orderTid: l.orderTid,
                 payment: { method: "paymongo", ref: referenceNumber || linkId, amount: (l.item.price || 0) * qty },
               });
               console.log(`JoyTel order ${l.orderTid}: ${r.ok ? "ok" : `failed (${r.error})`}${r.refunded ? " — refunded to wallet" : ""}`);

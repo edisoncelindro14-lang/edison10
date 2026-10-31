@@ -314,3 +314,94 @@ test('wallet: a JoyTel product that is not an eSIM still needs a phone number', 
   assert.equal(r.statusCode, 400);
   assert.match(r.body.error, /mobile number/i);
 });
+
+// ---- JOY SIM recharge (Card Recharge API) --------------------------------------
+const rechargeProduct = (over = {}) => ({ id: 'p-rech', name: '[Recharge] JOY Philippines - 1GB/day', price: 100, category: 'load', is_active: true, joytel_enabled: true, joytel_product_code: 'PH_1GB', joytel_type: 9, ...over });
+
+test('recharge: a daily plan sends the serial and days (= quantity) to cardRecharge, no email or phone needed', async () => {
+  db.products.push(rechargeProduct());
+  db.members.push({ id: 'm5', username: 'r', full_name: 'R', email: '', phone: '' });
+  db.transactions.push({ id: 't5', member_id: 'm5', type: 'adjustment', amount: 1000, status: 'completed' });
+  warehouse = () => ({ status: 200, body: { code: 0, data: { rechargeCode: 'CZ-1', orderTid: 'x' } } });
+  const r = await call({ member_id: 'm5', items: [{ product_id: 'p-rech', qty: 3, delivery: 'ab 12 3456' }] });
+  assert.equal(r.statusCode, 200);
+  const sent = warehouseLog.at(-1);
+  assert.equal(sent.endpoint, 'cardRecharge');
+  assert.deepEqual(sent.params.itemList, [{ productCode: 'PH_1GB', snCode: 'ab123456', days: 3 }]);
+  assert.match(sent.params.orderTid, /^KAB1[0-9]{20}$/);
+  assert.equal(balance('m5'), 1000 - 300);
+  const rec = record(`joytel_callback_${r.body.orders[0].orderTid}`);
+  assert.equal(rec.kind, 'recharge');
+  assert.equal(rec.statusText, 'submitted');
+  assert.equal(rec.rechargeCode, 'CZ-1');
+  assert.match(r.body.transactions[0].description, /→ ab123456 \| JoyTel:/);
+});
+
+test('recharge: bad serial or a total plan with quantity 2 is stopped before paying', async () => {
+  db.products.push(rechargeProduct(), rechargeProduct({ id: 'p-total', name: '[Recharge] JOY Philippines - Total 3GB - 05days', joytel_product_code: 'PH-05-3GB' }));
+  const bad = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: '' }] });
+  assert.equal(bad.statusCode, 400);
+  assert.match(bad.body.error, /serial/i);
+  const two = await call({ member_id: 'm1', items: [{ product_id: 'p-total', qty: 2, delivery: 'ABCDEF12' }] });
+  assert.equal(two.statusCode, 400);
+  assert.match(two.body.error, /one at a time/i);
+  assert.equal(balance('m1'), 1000);
+  assert.equal(warehouseLog.length, 0);
+});
+
+test('recharge: a total plan always sends days = 1', async () => {
+  db.products.push(rechargeProduct({ id: 'p-total', name: '[Recharge] JOY Philippines - Total 3GB - 05days', joytel_product_code: 'PH-05-3GB' }));
+  warehouse = () => ({ status: 200, body: { code: 0, data: { rechargeCode: 'CZ-2' } } });
+  await call({ member_id: 'm1', items: [{ product_id: 'p-total', qty: 1, delivery: 'ABCDEF12' }] });
+  assert.equal(warehouseLog.at(-1).params.itemList[0].days, 1);
+});
+
+test('recharge: JoyTel rejecting the order refunds the wallet', async () => {
+  db.products.push(rechargeProduct());
+  warehouse = () => ({ status: 200, body: { code: 4, message: 'Card not found' } });
+  const r = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: 'ABCDEF12' }] });
+  assert.equal(r.body.orders[0].refunded, true);
+  assert.equal(balance('m1'), 1000);
+});
+
+test('recharge: status check marks success, keeps waiting while recharging, refunds on failure', async () => {
+  const { checkRecharge } = await import('../api/_lib/joytel-fulfill.js');
+  db.products.push(rechargeProduct());
+  warehouse = () => ({ status: 200, body: { code: 0, data: { rechargeCode: 'CZ-9' } } });
+  const r = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: 'ABCDEF12' }] });
+  const tid = r.body.orders[0].orderTid;
+
+  warehouse = () => ({ status: 200, body: { code: 0, data: { orderTid: tid, itemList: [{ status: 0, statusDesc: 'Recharging' }] } } });
+  assert.equal((await checkRecharge(tid)).pending, true);
+  assert.equal(record(orderKey(tid)).statusText, 'submitted');
+  assert.equal(warehouseLog.at(-1).endpoint, 'cardRechargeQuery');
+  assert.equal(warehouseLog.at(-1).params.rechargeCode, 'CZ-9');
+
+  warehouse = () => ({ status: 200, body: { code: 0, data: { orderTid: tid, itemList: [{ status: 1, productExpireDate: '2026-12-01' }] } } });
+  assert.equal((await checkRecharge(tid)).statusText, 'delivered');
+  assert.equal(record(orderKey(tid)).expireDate, '2026-12-01');
+  assert.equal(balance('m1'), 1000 - 100);                  // delivered: money stays spent
+
+  // second order that fails at JoyTel
+  warehouse = () => ({ status: 200, body: { code: 0, data: { rechargeCode: 'CZ-10' } } });
+  const r2 = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: 'ABCDEF12' }] });
+  const tid2 = r2.body.orders[0].orderTid;
+  warehouse = () => ({ status: 200, body: { code: 0, data: { itemList: [{ status: 2, statusDesc: 'Card expired' }] } } });
+  const out = await checkRecharge(tid2);
+  assert.equal(out.refunded, true);
+  assert.equal(balance('m1'), 1000 - 100);                  // second order refunded
+  assert.equal((await checkRecharge(tid2)).statusText, 'failed');   // repeating is harmless
+});
+
+test('recharge: the check endpoint only answers for the order owner', async () => {
+  db.products.push(rechargeProduct());
+  warehouse = () => ({ status: 200, body: { code: 0, data: { rechargeCode: 'CZ-3' } } });
+  const r = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: 'ABCDEF12' }] });
+  const tid = r.body.orders[0].orderTid;
+  warehouse = () => ({ status: 200, body: { code: 0, data: { itemList: [{ status: 1 }] } } });
+  const other = await call({ action: 'check-recharge', member_id: 'm2', orderTid: tid });
+  assert.equal(other.statusCode, 404);
+  const mine = await call({ action: 'check-recharge', member_id: 'm1', orderTid: tid });
+  assert.equal(mine.statusCode, 200);
+  assert.equal(mine.body.statusText, 'delivered');
+});

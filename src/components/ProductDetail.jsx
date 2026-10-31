@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { useTable, useCurrentMember } from "../lib/useData";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, needsMobile } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -61,6 +61,8 @@ export default function ProductDetail({ productId }) {
   const hasLoad = product.category === "load";
   const hasSim = product.category === "sim";
   const hasMobile = needsMobile(product);
+  const hasSerial = isJoytelRecharge(product);
+  const [serial, setSerial] = useState("");
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
   const reviewCount = getProductReviewCount(product);
@@ -75,6 +77,7 @@ export default function ProductDetail({ productId }) {
 
   async function handleBuyNow(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
+    if (hasSerial && !serial.trim()) { toast.error("Please enter the serial number printed on your JOY SIM card"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
@@ -83,7 +86,7 @@ export default function ProductDetail({ productId }) {
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], hasMobile ? mobileNumber : (isJoytelEsim(product) ? "" : address));
+        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], deliveryFor(product, { mobile: mobileNumber, address, serial }));
         out.transactions.forEach(addLocalTx);
         summarizeOrders(out.orders, toast);
         refetchTx();
@@ -96,8 +99,8 @@ export default function ProductDetail({ productId }) {
             amount: total,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category }],
-            delivery: hasMobile ? mobileNumber : (isJoytelEsim(product) ? "" : address),
+            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category, delivery: hasSerial ? serial.trim() : undefined }],
+            delivery: deliveryFor(product, { mobile: mobileNumber, address, serial }),
           }),
         });
         const data = await res.json();
@@ -209,6 +212,13 @@ export default function ProductDetail({ productId }) {
 
           {/* Delivery details */}
           <div className="mt-6 space-y-4">
+            {hasSerial && (
+              <div>
+                <label className="text-sm font-medium text-gray-700">JOY SIM serial number</label>
+                <Input value={serial} onChange={e => setSerial(e.target.value)} placeholder="Printed on your JOY SIM card" className="mt-1" />
+                <p className="text-xs text-gray-500 mt-1">{/\/\s*day/i.test(product.name) ? "Quantity = number of days to add." : "Adds this plan to your SIM. One plan per order."}</p>
+              </div>
+            )}
             {hasMobile && (
               <div>
                 <div className="flex items-center justify-between">

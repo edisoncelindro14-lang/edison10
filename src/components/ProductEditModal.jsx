@@ -257,6 +257,7 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
                     className="w-full h-10 px-3 border border-gray-200 rounded-lg">
                     <option value={3}>eSIM</option>
                     <option value={1}>Physical SIM</option>
+                    <option value={9}>JOY SIM recharge (needs SIM serial)</option>
                   </select>
                 </div>
                 <div className="sm:col-span-2">

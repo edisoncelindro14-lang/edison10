@@ -21,7 +21,7 @@ export async function payFromWallet(memberId, items, delivery = "") {
 export function summarizeOrders(orders = [], toast) {
   const failed = orders.filter(o => !o.ok);
   if (failed.length === 0) {
-    toast.success(orders.length ? "Order placed! Your eSIM details will appear in My Orders shortly." : "Order placed! Paid from wallet.");
+    toast.success(orders.length ? "Order placed! Check My Orders for the status." : "Order placed! Paid from wallet.");
     return true;
   }
   for (const o of failed) {
@@ -29,4 +29,14 @@ export function summarizeOrders(orders = [], toast) {
     else toast.error(`${o.productName}: JoyTel did not confirm the order yet. Please contact the shop before ordering again.`);
   }
   return false;
+}
+
+/** Asks the server to check a JOY SIM recharge with JoyTel (there is no callback for these). */
+export async function checkRecharge(memberId, orderTid) {
+  const res = await fetch("/api/orders/wallet-pay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "check-recharge", member_id: memberId, orderTid }),
+  });
+  return res.json().catch(() => ({}));
 }

@@ -60,10 +60,10 @@ export default async function handler(req, res) {
       if (product.is_active === false) return res.status(400).json({ error: `${product.name} is not available` });
       if (isJoytelProduct(product)) {
         hasJoytelItem = true;
-        const problem = joytelPreflight(product, member, delivery);
+        const problem = joytelPreflight(product, member, i.delivery ?? delivery, qty);
         if (problem) return res.status(400).json({ error: problem });
       }
-      cartItems.push({ product_id: product.id, name: product.name, price: getFinalPrice(product), qty, category: product.category });
+      cartItems.push({ product_id: product.id, name: product.name, price: getFinalPrice(product), qty, category: product.category, ...(i.delivery ? { delivery: String(i.delivery) } : {}) });
     }
     parsedAmount = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
   }

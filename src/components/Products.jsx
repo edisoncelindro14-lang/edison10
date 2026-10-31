@@ -5,7 +5,7 @@ import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, 
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance, isJoytelEsim, needsMobile } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -20,6 +20,7 @@ export default function Products() {
   const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileNumber, setMobileNumber] = useState("");
+  const [serial, setSerial] = useState("");
   const [address, setAddress] = useState("");
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
@@ -127,6 +128,7 @@ export default function Products() {
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
     const hasMobile = cart.some(needsMobile);
+    if (cart.some(isJoytelRecharge) && !serial.trim()) { toast.error("Please enter the serial number printed on your JOY SIM card"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for your order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
@@ -139,7 +141,7 @@ export default function Products() {
           currentMember.id,
           cart.map(i => ({
             product_id: i.id, qty: i.qty,
-            delivery: needsMobile(i) ? mobileNumber : (isJoytelEsim(i) ? "" : address),
+            delivery: deliveryFor(i, { mobile: mobileNumber, address, serial }),
           })),
         );
         out.transactions.forEach(addLocalTx);
@@ -155,7 +157,7 @@ export default function Products() {
             amount: cartTotal,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category })),
+            items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category, delivery: isJoytelRecharge(i) ? serial.trim() : undefined })),
             delivery: hasMobile ? mobileNumber : (cart.every(isJoytelEsim) ? "" : address),
           }),
         });
@@ -335,6 +337,12 @@ export default function Products() {
                       </div>
                     ))}
                   </div>
+                  {cart.some(isJoytelRecharge) && (
+                    <div className="mb-4">
+                      <label className="text-sm font-medium text-gray-700">JOY SIM serial number</label>
+                      <Input value={serial} onChange={e => setSerial(e.target.value)} placeholder="Printed on your JOY SIM card" className="mt-1" />
+                    </div>
+                  )}
                   {cart.some(needsMobile) && (
                     <div className="mb-4">
                       <div className="flex items-center justify-between">
