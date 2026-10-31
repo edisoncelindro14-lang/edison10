@@ -1,17 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingBag, ArrowRight, Filter, QrCode, Download, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { useTable, useCurrentMember } from "../lib/useData";
 import { money, formatDate, TRANSACTION_TYPES } from "../lib/helpers";
 import { Button, Badge } from "./ui";
+import { checkRecharge } from "../lib/orders";
 
 export default function Orders() {
   const [filter, setFilter] = useState("all");
   const [expandedOrder, setExpandedOrder] = useState(null);
   const { data: members = [] } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: settings = [] } = useTable("system_settings");
+  const { data: settings = [], refetch: refetchSettings } = useTable("system_settings");
   const { currentMember } = useCurrentMember(members);
 
   // Find JoyTel callback data for an order (by orderTid match in description)
@@ -28,6 +29,28 @@ export default function Orders() {
     }
     return null;
   }
+
+  // JOY SIM recharges have no callback: ask JoyTel for the result while the order is still open.
+  const polls = useRef({});
+  useEffect(() => {
+    if (!currentMember) return;
+    const open = settings
+      .filter(s => s.setting_key?.startsWith("joytel_callback_"))
+      .map(s => { try { return typeof s.setting_value === "string" ? JSON.parse(s.setting_value) : s.setting_value; } catch { return null; } })
+      .filter(d => d && d.kind === "recharge" && String(d.member_id) === String(currentMember.id) && !d.refunded && ["submitted", "unknown"].includes(d.statusText));
+    if (!open.length) return;
+    const timer = setInterval(async () => {
+      let changed = false;
+      for (const d of open) {
+        polls.current[d.orderTid] = (polls.current[d.orderTid] || 0) + 1;
+        if (polls.current[d.orderTid] > 40) continue;            // stop after about 10 minutes
+        const r = await checkRecharge(currentMember.id, d.orderTid);
+        if (r.statusText && r.statusText !== d.statusText) changed = true;
+      }
+      if (changed) { refetchSettings?.(); }
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [settings, currentMember?.id]);
 
   if (!currentMember) {
     return (
@@ -116,7 +139,13 @@ export default function Orders() {
                       {joytelData && !joytelData.refunded && !hasQR && joytelData.statusText === "unknown" && (
                         <p className="text-xs text-amber-600">Waiting for JoyTel to confirm this order. Please contact the shop if it takes long.</p>
                       )}
-                      {joytelData && !joytelData.refunded && !hasQR && joytelData.statusText !== "unknown" && joytelData.statusText !== "failed" && (
+                      {joytelData?.kind === "recharge" && !joytelData.refunded && joytelData.statusText === "delivered" && (
+                        <p className="text-xs text-green-600">SIM {joytelData.snCode} recharged{joytelData.expireDate ? `. Plan valid until ${joytelData.expireDate}` : ""}.</p>
+                      )}
+                      {joytelData?.kind === "recharge" && !joytelData.refunded && ["submitted", "submitting"].includes(joytelData.statusText) && (
+                        <p className="text-xs text-blue-600">Recharging SIM {joytelData.snCode}. Checking with JoyTel…</p>
+                      )}
+                      {joytelData && joytelData.kind !== "recharge" && !joytelData.refunded && !hasQR && joytelData.statusText !== "unknown" && joytelData.statusText !== "failed" && (
                         <p className="text-xs text-blue-600">Your eSIM is being prepared. It will appear here shortly.</p>
                       )}
                     </div>

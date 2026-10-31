@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
-import { supabase } from '../_lib/joytel-server.js';
+import { supabase, getSetting } from '../_lib/joytel-server.js';
 import {
-  isJoytelProduct, joytelPreflight, placeJoytelFulfilment, walletOrderTid,
+  isJoytelProduct, joytelPreflight, placeJoytelFulfilment, walletOrderTid, checkRecharge, orderKey, isJoytelRecharge, cleanSerial,
 } from '../_lib/joytel-fulfill.js';
 import { getFinalPrice, calculateWalletBalance, FALLBACK_PRODUCTS } from '../../src/lib/helpers.js';
 
@@ -35,6 +35,14 @@ export default async function handler(req, res) {
   if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
 
   try {
+    // Status check for a JOY SIM recharge (JoyTel sends no callback for these). Only the order's own member may ask.
+    if (req.body?.action === 'check-recharge') {
+      const { member_id: mid, orderTid } = req.body;
+      const rec = orderTid ? await getSetting(orderKey(orderTid)) : null;
+      if (!rec || String(rec.member_id) !== String(mid)) return res.status(404).json({ error: 'Order not found' });
+      return res.status(200).json(await checkRecharge(orderTid));
+    }
+
     const { member_id, items, delivery = '' } = req.body || {};
     if (!member_id) return res.status(400).json({ error: 'member_id is required' });
     if (!Array.isArray(items) || items.length === 0 || items.length > 20) {
@@ -63,7 +71,7 @@ export default async function handler(req, res) {
       if (!product) return res.status(404).json({ error: 'A product in your cart no longer exists' });
       if (product.is_active === false) return res.status(400).json({ error: `${product.name} is not available` });
       if (isJoytelProduct(product)) {
-        const problem = joytelPreflight(product, member, i.delivery ?? delivery);
+        const problem = joytelPreflight(product, member, i.delivery ?? delivery, i.qty);
         if (problem) return res.status(400).json({ error: problem });
       }
       lines.push({ product, qty: i.qty, delivery: i.delivery ?? delivery, total: getFinalPrice(product) * i.qty });
@@ -80,7 +88,7 @@ export default async function handler(req, res) {
       const txId = randomUUID();
       const joytel = isJoytelProduct(product);
       const orderTid = joytel ? walletOrderTid(process.env.JOYTEL_CUSTOMER_CODE, txId) : null;
-      const description = `${product.name} x${qty} → ${lineDelivery || (joytel ? 'email' : '')}${orderTid ? ` | JoyTel: ${orderTid}` : ''}`;
+      const description = `${product.name} x${qty} → ${isJoytelRecharge(product) ? cleanSerial(lineDelivery) : (lineDelivery || (joytel ? 'email' : ''))}${orderTid ? ` | JoyTel: ${orderTid}` : ''}`;
 
       const { data: tx, error } = await supabase
         .from('transactions')
