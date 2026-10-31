@@ -16,6 +16,7 @@ export default function ProductDetail({ productId }) {
   const nav = useNavigate();
   const [qty, setQty] = useState(1);
   const [mobileNumber, setMobileNumber] = useState("");
+  const [serial, setSerial] = useState("");
   const [address, setAddress] = useState("");
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
@@ -62,7 +63,6 @@ export default function ProductDetail({ productId }) {
   const hasSim = product.category === "sim";
   const hasMobile = needsMobile(product);
   const hasSerial = isJoytelRecharge(product);
-  const [serial, setSerial] = useState("");
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
   const reviewCount = getProductReviewCount(product);
