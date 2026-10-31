@@ -39,7 +39,13 @@ export default async function handler(req, res) {
     if (req.body?.action === 'check-recharge') {
       const { member_id: mid, orderTid } = req.body;
       const rec = orderTid ? await getSetting(orderKey(orderTid)) : null;
-      if (!rec || String(rec.member_id) !== String(mid)) return res.status(404).json({ error: 'Order not found' });
+      let allowed = !!rec && String(rec.member_id) === String(mid);
+      if (rec && !allowed) {
+        // Shop staff (admin, super admin, reseller) may check any order, for the JoyTel Orders log page.
+        const { data: staff } = await supabase.from('members').select('id,username,role').eq('id', mid).maybeSingle();
+        allowed = !!staff && (['admin', 'super_admin', 'reseller'].includes(staff.role) || staff.username === 'dok');
+      }
+      if (!allowed) return res.status(404).json({ error: 'Order not found' });
       return res.status(200).json(await checkRecharge(orderTid));
     }
 
