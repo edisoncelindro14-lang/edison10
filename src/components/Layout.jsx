@@ -18,6 +18,7 @@ const NAV_ITEMS = [
 
 const JOYTEL_ITEMS = [
   { name: "JoyTel Dashboard", icon: Radio, path: "JoytelDashboard" },
+  { name: "JoyTel Orders", icon: Radio, path: "JoytelOrders" },
   { name: "JoyTel Test", icon: Radio, path: "JoytelTest" },
   { name: "JoyTel Login", icon: ExternalLink, path: "JoytelDealerLogin" },
 ];

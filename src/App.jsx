@@ -22,10 +22,11 @@ import ResellerPanel from "./components/ResellerPanel";
 import JoytelTest from "./components/JoytelTest";
 import JoytelDealerLogin from "./components/JoytelDealerLogin";
 import JoytelDashboard from "./components/JoytelDashboard";
+import JoytelOrders from "./components/JoytelOrders";
 
 const PAGES = {
   Dashboard, Products: ShopHome, Wallet, Orders, Profile, Admin,
-  SuperAdminPanel, AdminPanel, ResellerPanel, JoytelTest, JoytelDealerLogin, JoytelDashboard,
+  SuperAdminPanel, AdminPanel, ResellerPanel, JoytelTest, JoytelDealerLogin, JoytelDashboard, JoytelOrders,
 };
 
 function PageRouter() {
@@ -67,6 +68,7 @@ function PageRouter() {
       ResellerPanel: canAccessReseller,
       JoytelDashboard: canAccessJoytel,
       JoytelTest: canAccessJoytel,
+      JoytelOrders: canAccessJoytel,
       JoytelDealerLogin: canAccessJoytel,
     };
     if (pageKey in panelAccess && !panelAccess[pageKey]) {

@@ -405,3 +405,16 @@ test('recharge: the check endpoint only answers for the order owner', async () =
   assert.equal(mine.statusCode, 200);
   assert.equal(mine.body.statusText, 'delivered');
 });
+
+test('recharge: shop staff (admin) can check any order, a normal member cannot', async () => {
+  db.products.push(rechargeProduct());
+  db.members.push({ id: 'adm', username: 'boss', role: 'admin' }, { id: 'usr', username: 'u', role: 'member' });
+  warehouse = () => ({ status: 200, body: { code: 0, data: { rechargeCode: 'CZ-7' } } });
+  const r = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: 'ABCDEF12' }] });
+  const tid = r.body.orders[0].orderTid;
+  warehouse = () => ({ status: 200, body: { code: 0, data: { itemList: [{ status: 1, productExpireDate: '2027-01-01' }] } } });
+  assert.equal((await call({ action: 'check-recharge', member_id: 'usr', orderTid: tid })).statusCode, 404);
+  const staff = await call({ action: 'check-recharge', member_id: 'adm', orderTid: tid });
+  assert.equal(staff.statusCode, 200);
+  assert.equal(staff.body.statusText, 'delivered');
+});
