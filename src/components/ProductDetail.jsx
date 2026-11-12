@@ -77,7 +77,7 @@ export default function ProductDetail({ productId }) {
 
   async function handleBuyNow(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
-    if (hasSerial && !serial.trim()) { toast.error("Please enter the serial number printed on your JOY SIM card"); return; }
+    if (hasSerial && !serial.trim()) { toast.error("Please enter your SIM number"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
@@ -214,8 +214,8 @@ export default function ProductDetail({ productId }) {
           <div className="mt-6 space-y-4">
             {hasSerial && (
               <div>
-                <label className="text-sm font-medium text-gray-700">JOY SIM serial number</label>
-                <Input value={serial} onChange={e => setSerial(e.target.value)} placeholder="Printed on your JOY SIM card" className="mt-1" />
+                <label className="text-sm font-medium text-gray-700">SIM number</label>
+                <Input value={serial} onChange={e => setSerial(e.target.value)} placeholder="Enter your SIM number" className="mt-1" />
                 <p className="text-xs text-gray-500 mt-1">{/\/\s*day/i.test(product.name) ? "Quantity = number of days to add." : "Adds this plan to your SIM. One plan per order."}</p>
               </div>
             )}
