@@ -341,7 +341,7 @@ test('recharge: bad serial or a total plan with quantity 2 is stopped before pay
   db.products.push(rechargeProduct(), rechargeProduct({ id: 'p-total', name: '[Recharge] JOY Philippines - Total 3GB - 05days', joytel_product_code: 'PH-05-3GB' }));
   const bad = await call({ member_id: 'm1', items: [{ product_id: 'p-rech', qty: 1, delivery: '' }] });
   assert.equal(bad.statusCode, 400);
-  assert.match(bad.body.error, /serial/i);
+  assert.match(bad.body.error, /SIM number/i);
   const two = await call({ member_id: 'm1', items: [{ product_id: 'p-total', qty: 2, delivery: 'ABCDEF12' }] });
   assert.equal(two.statusCode, 400);
   assert.match(two.body.error, /one at a time/i);

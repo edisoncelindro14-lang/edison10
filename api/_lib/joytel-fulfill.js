@@ -68,7 +68,7 @@ export function joytelPreflight(product, member, delivery, qty = 1) {
     return 'JoyTel ordering is not configured yet. Please contact the shop.';
   }
   if (isJoytelRecharge(product)) {
-    if (!validSerial(delivery)) return 'Please enter the serial number printed on your JOY SIM card.';
+    if (!validSerial(delivery)) return 'Please enter your SIM number.';
     if (!isDailyPlan(product) && qty > 1) return 'This plan can only be bought one at a time.';
     return null;
   }

@@ -214,7 +214,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
     const hasMobile = cart.some(needsMobile);
-    if (cart.some(isJoytelRecharge) && !serial.trim()) { toast.error("Please enter the serial number printed on your JOY SIM card"); return; }
+    if (cart.some(isJoytelRecharge) && !serial.trim()) { toast.error("Please enter your SIM number"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for your order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
     const isWallet = paymentMethod === "wallet";
@@ -418,8 +418,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
                   </div>
                   {cart.some(isJoytelRecharge) && (
                     <div className="mb-4">
-                      <label className="text-sm font-medium text-gray-700">JOY SIM serial number</label>
-                      <Input value={serial} onChange={e => setSerial(e.target.value)} placeholder="Printed on your JOY SIM card" className="mt-1" />
+                      <label className="text-sm font-medium text-gray-700">SIM number</label>
+                      <Input value={serial} onChange={e => setSerial(e.target.value)} placeholder="Enter your SIM number" className="mt-1" />
                     </div>
                   )}
                   {cart.some(needsMobile) && (
