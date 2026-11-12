@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 // useCallback is used below for memoizing updateLocalRecord/addLocalRecord
 import { supabase } from "./supabase";
 import { getSessionMemberId } from "./auth";
+import { buildProductQuery } from "./productQuery";
 
 // In-flight request deduplication — when multiple components call useTable for the
 // same table simultaneously, only one request reaches Supabase and the result is shared.
@@ -116,4 +117,80 @@ export async function updateRecord(tableName, id, data) {
 export async function deleteRecord(tableName, id) {
   const { error } = await supabase.from(tableName).delete().eq("id", id);
   if (error) throw error;
+}
+
+// ---- Products: server-side paging / search (the catalogue can hold thousands of rows) ----
+
+// Returns one page at a time plus the total match count.
+export function useProductPage({ category = "all", network = "all", query = "", activeOnly = true, page = 0, pageSize = 24 } = {}) {
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const from = page * pageSize;
+        const { data, count, error } = await buildProductQuery(supabase, { category, network, query, activeOnly })
+          .order("sort_order", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (cancelled) return;
+        setRows(data || []);
+        setTotal(count ?? (data || []).length);
+      } catch (e) {
+        console.error("Error fetching products:", e);
+        if (!cancelled) { setRows([]); setTotal(0); }
+      }
+      if (!cancelled) setIsLoading(false);
+    }, query ? 250 : 0); // debounce typing
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [category, network, query, activeOnly, page, pageSize, tick]);
+
+  const updateLocalRecord = useCallback((id, updates) => {
+    setRows(prev => prev.map(r => String(r.id) === String(id) ? { ...r, ...updates } : r));
+  }, []);
+  const refetch = useCallback(() => setTick(t => t + 1), []);
+  return { data: rows, total, isLoading, refetch, updateLocalRecord };
+}
+
+// A single product by id (product detail page).
+export function useProduct(id) {
+  const [product, setProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+        if (error) throw error;
+        if (!cancelled) setProduct(data || null);
+      } catch (e) {
+        console.error("Error fetching product:", e);
+        if (!cancelled) setProduct(null);
+      }
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [id, tick]);
+  const updateLocalRecord = useCallback((_id, updates) => setProduct(p => (p ? { ...p, ...updates } : p)), []);
+  return { product, isLoading, refetch: useCallback(() => setTick(t => t + 1), []), updateLocalRecord };
+}
+
+// Total number of products (cheap HEAD request, no rows transferred).
+export function useProductCount() {
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from("products").select("id", { count: "exact", head: true })
+      .then(({ count: c }) => { if (!cancelled) setCount(c ?? null); });
+    return () => { cancelled = true; };
+  }, []);
+  return count;
 }

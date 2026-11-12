@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, ChevronLeft, Zap, Smartphone, Store, Check, Pencil, Star, Radio } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, useCurrentMember } from "../lib/useData";
+import { useTable, useCurrentMember, useProduct, useProductPage } from "../lib/useData";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
@@ -25,7 +25,8 @@ export default function ProductDetail({ productId }) {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions");
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord } = useTable("products");
+  const { product: fetchedProduct, isLoading: productsLoading, updateLocalRecord } = useProduct(id);
+  const { data: sameCategory = [] } = useProductPage({ category: fetchedProduct?.category || "all", pageSize: 6, activeOnly: true });
   const { currentMember } = useCurrentMember(members);
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
@@ -39,7 +40,7 @@ export default function ProductDetail({ productId }) {
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
-  const product = products.find(p => String(p.id) === String(id)) || FALLBACK_PRODUCTS.find(p => String(p.id) === String(id));
+  const product = fetchedProduct || FALLBACK_PRODUCTS.find(p => String(p.id) === String(id));
 
   if (!product) {
     if (productsLoading) {
@@ -71,7 +72,7 @@ export default function ProductDetail({ productId }) {
   const gradient = NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600";
 
   // Related products (same category or network, exclude current)
-  const relatedProducts = (products.length > 0 ? products : FALLBACK_PRODUCTS)
+  const relatedProducts = (sameCategory.length > 0 ? sameCategory : FALLBACK_PRODUCTS)
     .filter(p => p.id !== product.id && (p.category === product.category || p.network === product.network))
     .slice(0, 4);
 

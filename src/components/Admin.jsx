@@ -6,7 +6,7 @@ import {
   Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useTable, updateRecord, createRecord, deleteRecord } from "../lib/useData";
+import { useTable, useProductCount, updateRecord, createRecord, deleteRecord } from "../lib/useData";
 import { getSessionMemberId } from "../lib/auth";
 import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber, calculateWalletBalance } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
@@ -34,7 +34,7 @@ export default function Admin({ panelRole } = {}) {
   const isReseller = currentUserRole === "reseller";
   const { data: transactions = [], addLocalRecord: addLocalTx, updateLocalRecord: updateLocalTx } = useTable("transactions");
   const { data: topupReqs = [], updateLocalRecord: updateLocalTopup } = useTable("conversion_requests");
-  const { data: products = [] } = useTable("products");
+  const productCount = useProductCount();
   const { data: gcashInfo = [] } = useTable("gcash_info");
   const { data: allSettings = [] } = useTable("system_settings");
   const joytelScreenshots = allSettings.filter(s => s.setting_key?.startsWith("joytel_screenshot_"));
@@ -43,7 +43,7 @@ export default function Admin({ panelRole } = {}) {
   const pendingMembers = activeMembers.filter(m => m.status === "pending");
   const approvedMembers = activeMembers.filter(m => m.status === "approved");
 
-  const allProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
+  const totalProducts = productCount ?? FALLBACK_PRODUCTS.length;
   const purchaseOrders = transactions.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const pendingTopups = topupReqs.filter(r => r.status === "pending").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const staffMembers = activeMembers.filter(m => m.role === "staff");
@@ -257,7 +257,7 @@ export default function Admin({ panelRole } = {}) {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Total Products", value: allProducts.length, icon: Smartphone, color: "from-purple-500 to-pink-600" },
+          { label: "Total Products", value: totalProducts, icon: Smartphone, color: "from-purple-500 to-pink-600" },
           { label: "Total Orders", value: purchaseOrders.length, icon: ShoppingBag, color: "from-blue-500 to-indigo-600" },
           { label: "Pending Orders", value: purchaseOrders.filter(o => o.status === "pending").length, icon: Wallet, color: "from-amber-500 to-orange-600" },
           { label: "Total Revenue", value: money(purchaseOrders.filter(o => o.status === "completed").reduce((sum, o) => sum + Math.abs(Number(o.amount || 0)), 0)), icon: Check, color: "from-emerald-500 to-teal-600" },
@@ -716,7 +716,7 @@ export default function Admin({ panelRole } = {}) {
               <p><strong>Total Members:</strong> {activeMembers.length}</p>
               <p><strong>Approved Members:</strong> {approvedMembers.length}</p>
               <p><strong>Pending Members:</strong> {pendingMembers.length}</p>
-              <p><strong>Total Products:</strong> {allProducts.length}</p>
+              <p><strong>Total Products:</strong> {totalProducts}</p>
               <p><strong>Total Orders:</strong> {purchaseOrders.length}</p>
               <p><strong>Pending Top-ups:</strong> {pendingTopups.length}</p>
             </div>

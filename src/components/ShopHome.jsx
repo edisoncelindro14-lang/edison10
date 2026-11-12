@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
-import { useTable, useCurrentMember } from "../lib/useData";
+import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
@@ -22,6 +22,8 @@ function StarRating({ rating, count }) {
     </div>
   );
 }
+
+const PAGE_SIZE = 24;
 
 function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
   const nav = useNavigate();
@@ -135,8 +137,20 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const { data: members = [] } = useTable("members", { enabled: !readOnly });
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions", { enabled: !readOnly });
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
+  const memberRole0 = currentMember?.role;
+  const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [search, filterCategory, canSeeInactive]);
+  // Featured / best sellers come from the first page of the curated order;
+  // the "All Products" grid is paged + searched on the server (thousands of rows).
+  const { data: topProducts = [], isLoading: topLoading, updateLocalRecord: updateTopLocal, refetch: refetchTop } =
+    useProductPage({ activeOnly: !canSeeInactive, pageSize: 40 });
+  const { data: products = [], total, isLoading: productsLoading, refetch: refetchGrid, updateLocalRecord: updateGridLocal } =
+    useProductPage({ category: filterCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE });
+  const updateLocalRecord = (id, u) => { updateTopLocal(id, u); updateGridLocal(id, u); };
+  const addLocalRecord = () => { refetchTop(); refetchGrid(); };
+  const refetchProducts = () => { refetchTop(); refetchGrid(); };
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
   useEffect(() => {
@@ -149,24 +163,19 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   // Only admins/super_admins may reorder product cards via drag-and-drop.
   const canReorder = !readOnly && (memberRole === "super_admin" || memberRole === "admin");
 
-  const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
-  const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
-  const orderedProducts = useMemo(() => sortProductsByOrder(visibleProducts), [visibleProducts, sortVersion]);
+  const productCountAll = useProductCount();
+  const noFilters = !search && filterCategory === "all";
+  const showFallback = !topLoading && !productsLoading && total === 0 && noFilters;
+  const orderedProducts = showFallback ? sortProductsByOrder(FALLBACK_PRODUCTS) : topProducts;
+  const filtered = showFallback ? orderedProducts : products;
+  // Drag-to-reorder only makes sense when the whole list fits on one page.
+  const reorderable = canReorder && noFilters && total <= PAGE_SIZE;
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
   const featured = orderedProducts.slice(0, 4);
   const bestSellers = orderedProducts.filter(p => getProductBadge(p) === "best_seller").slice(0, 5);
   const bestSellerList = bestSellers.length > 0 ? bestSellers : orderedProducts.slice(4, 9);
-
-  const filtered = orderedProducts.filter(p => {
-    if (filterCategory !== "all" && p.category !== filterCategory) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!p.name.toLowerCase().includes(q) && !p.description?.toLowerCase().includes(q) && !p.network?.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
@@ -254,7 +263,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { canManage, canReorder, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
+  const cardProps = { canManage, canReorder: reorderable, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -271,7 +280,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             {!currentMember && <Link to="/MemberLogin"><Button variant="outline" className="border-gray-300">Log In</Button></Link>}
           </div>
           <div className="flex gap-8 mt-8">
-            <div><p className="text-2xl font-extrabold text-gray-900">{allProducts.length}+</p><p className="text-xs text-gray-400 uppercase">Products</p></div>
+            <div><p className="text-2xl font-extrabold text-gray-900">{showFallback ? orderedProducts.length : (productCountAll ?? orderedProducts.length)}+</p><p className="text-xs text-gray-400 uppercase">Products</p></div>
             <div><p className="text-2xl font-extrabold text-gray-900">10K+</p><p className="text-xs text-gray-400 uppercase">Happy Customers</p></div>
             <div><p className="text-2xl font-extrabold text-gray-900 flex items-center gap-1">4.9 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /></p><p className="text-xs text-gray-400 uppercase">Rating</p></div>
           </div>
@@ -353,7 +362,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
       {/* All Products */}
       <section id="all-products" className="mb-10 scroll-mt-20">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">All Products <span className="text-gray-400 text-base font-normal">({filtered.length} items)</span></h2>
+          <h2 className="text-2xl font-bold text-gray-900">All Products <span className="text-gray-400 text-base font-normal">({showFallback ? filtered.length : total} items)</span></h2>
           {canManage && <Button onClick={() => setEditProduct({})} className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="w-4 h-4" /> Add Product</Button>}
         </div>
 
@@ -374,7 +383,14 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
         </div>
-        {filtered.length === 0 && <div className="text-center py-16"><p className="text-gray-400 text-lg">No products found.</p></div>}
+        {total > PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-3 mt-8">
+            <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+            <span className="text-sm text-gray-500">Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
+            <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
+          </div>
+        )}
+        {filtered.length === 0 && !productsLoading && <div className="text-center py-16"><p className="text-gray-400 text-lg">No products found.</p></div>}
       </section>
 
       {/* CTA */}
