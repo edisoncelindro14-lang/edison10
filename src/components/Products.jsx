@@ -4,13 +4,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
-import { useTable, useCurrentMember } from "../lib/useData";
+import { useTable, useCurrentMember, useProductPage } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 import JoytelCatalogPicker from "./JoytelCatalogPicker";
 import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
+
+const PAGE_SIZE = 24;
 
 export default function Products() {
   const nav = useNavigate();
@@ -33,8 +35,15 @@ export default function Products() {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions");
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord, addLocalRecord } = useTable("products", { order: "created_at" });
   const { currentMember } = useCurrentMember(members);
+  const memberRole0 = currentMember?.role;
+  const canSeeInactive = memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok";
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [search, filterNetwork, filterCategory, canSeeInactive]);
+  // Products are fetched one page at a time from the server (the catalogue can hold thousands).
+  const { data: products = [], total, isLoading: productsLoading, refetch: refetchProducts, updateLocalRecord } =
+    useProductPage({ category: filterCategory, network: filterNetwork, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE });
+  const addLocalRecord = () => refetchProducts();
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
   useEffect(() => {
@@ -47,22 +56,14 @@ export default function Products() {
   // Only admins/super_admins may reorder product cards via drag-and-drop.
   const canReorder = memberRole === "super_admin" || memberRole === "admin";
 
-  const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
-  // For admin/reseller, show ALL products (including inactive). For regular users, only active.
-  const visibleProducts = canManage ? allProducts : allProducts.filter(p => p.is_active !== false);
-  const orderedProducts = useMemo(() => sortProductsByOrder(visibleProducts), [visibleProducts, sortVersion]);
+  const noFilters = !search && filterNetwork === "all" && filterCategory === "all";
+  const showFallback = !productsLoading && total === 0 && noFilters;
+  const filtered = showFallback ? sortProductsByOrder(FALLBACK_PRODUCTS) : products;
+  const orderedProducts = filtered;
+  // Drag-to-reorder only makes sense when the whole list is on one page.
+  const reorderable = canReorder && noFilters && total <= PAGE_SIZE;
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
-
-  const filtered = orderedProducts.filter(p => {
-    if (filterNetwork !== "all" && p.network !== filterNetwork) return false;
-    if (filterCategory !== "all" && p.category !== filterCategory) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!p.name.toLowerCase().includes(q) && !p.network?.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
@@ -231,12 +232,12 @@ export default function Products() {
           const isAvailable = p.is_active !== false;
           return (
             <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-              draggable={canReorder}
-              onDragStart={canReorder ? (e) => handleDragStart(e, p.id) : undefined}
-              onDragOver={canReorder ? (e) => handleDragOver(e, p.id) : undefined}
-              onDrop={canReorder ? (e) => handleDrop(e, p.id) : undefined}
-              onDragEnd={canReorder ? () => { setDraggedId(null); setDragOverId(null); } : undefined}
-              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${canReorder ? "cursor-grab active:cursor-grabbing" : ""}`}
+              draggable={reorderable}
+              onDragStart={reorderable ? (e) => handleDragStart(e, p.id) : undefined}
+              onDragOver={reorderable ? (e) => handleDragOver(e, p.id) : undefined}
+              onDrop={reorderable ? (e) => handleDrop(e, p.id) : undefined}
+              onDragEnd={reorderable ? () => { setDraggedId(null); setDragOverId(null); } : undefined}
+              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${reorderable ? "cursor-grab active:cursor-grabbing" : ""}`}
               onClick={() => nav(`/Products/${p.id}`)}>
               {/* Not Available stamp */}
               {!isAvailable && (
@@ -247,7 +248,7 @@ export default function Products() {
               {/* Drag handle + Edit button for admin/reseller */}
               {canManage && (
                 <>
-                  {canReorder && (
+                  {reorderable && (
                     <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
                       <GripVertical className="w-3.5 h-3.5 text-gray-500" />
                     </div>
@@ -300,7 +301,16 @@ export default function Products() {
         })}
       </div>
 
-      {filtered.length === 0 && (
+
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-center gap-3 mt-8">
+          <Button variant="outline" disabled={page === 0} onClick={() => { setPage(p => Math.max(0, p - 1)); window.scrollTo(0, 0); }}>Previous</Button>
+          <span className="text-sm text-gray-500">Page {page + 1} of {Math.ceil(total / PAGE_SIZE)} · {total} products</span>
+          <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => { setPage(p => p + 1); window.scrollTo(0, 0); }}>Next</Button>
+        </div>
+      )}
+
+      {filtered.length === 0 && !productsLoading && (
         <div className="text-center py-16">
           <p className="text-gray-400 text-lg">No products found.</p>
         </div>

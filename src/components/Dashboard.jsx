@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Wallet, ArrowRight, ShoppingBag, Zap, Smartphone, TrendingUp, Crown, Shield, Store, Pencil, LayoutDashboard, User } from "lucide-react";
-import { useTable, useCurrentMember, createRecord } from "../lib/useData";
+import { useTable, useProductPage, useCurrentMember, createRecord } from "../lib/useData";
 import { supabase } from "../lib/supabase";
 import { money, formatDate, FALLBACK_PRODUCTS, NETWORK_COLORS, getFinalPrice, calculateWalletBalance } from "../lib/helpers";
 import { Button } from "./ui";
@@ -10,7 +10,7 @@ import { Button } from "./ui";
 export default function Dashboard() {
   const { data: members = [], isLoading } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
-  const { data: products = [], isLoading: productsLoading } = useTable("products");
+  const { data: products = [], isLoading: productsLoading } = useProductPage({ pageSize: 6, activeOnly: true });
   const { currentMember } = useCurrentMember(members);
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
