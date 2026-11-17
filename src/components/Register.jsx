@@ -14,6 +14,17 @@ export default function Register() {
   const [form, setForm] = useState({ username: "", password: "", confirm_password: "" });
   const [showPwd, setShowPwd] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [usernameError, setUsernameError] = useState("");
+
+  // Returns true when the username is already taken
+  async function checkUsername() {
+    const name = form.username.trim();
+    if (!name) { setUsernameError(""); return false; }
+    const { data } = await supabase.from("members").select("id").ilike("username", name).limit(1);
+    const taken = (data?.length || 0) > 0;
+    setUsernameError(taken ? "That username is already taken. Please choose another." : "");
+    return taken;
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -27,14 +38,12 @@ export default function Register() {
     }
     setBusy(true);
     try {
-      const { data: existing } = await supabase.from("members").select("id").eq("username", form.username).limit(1);
-      if (existing?.length > 0) {
-        toast.error("Username already taken");
+      if (await checkUsername()) {
         setBusy(false);
         return;
       }
       const { error } = await supabase.from("members").insert({
-        username: form.username,
+        username: form.username.trim(),
         password: form.password,
         full_name: form.username,
         referral_code: generateReferralCode(),
@@ -66,8 +75,9 @@ export default function Register() {
               <Label>Username *</Label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="Choose a username" className="pl-12" required />
+                <Input value={form.username} onChange={e => { setForm({ ...form, username: e.target.value }); if (usernameError) setUsernameError(""); }} onBlur={checkUsername} placeholder="Choose a username" className={`pl-12 ${usernameError ? "border-red-400" : ""}`} required />
               </div>
+              {usernameError && <p className="text-sm text-red-500 font-medium">{usernameError}</p>}
             </div>
             <div className="space-y-2">
               <Label>Password *</Label>
