@@ -10,6 +10,7 @@ import { useTable, useProductCount, updateRecord, createRecord, deleteRecord } f
 import { getSessionMemberId } from "../lib/auth";
 import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber, calculateWalletBalance } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
+import AdminProfilesTab from "./AdminProfilesTab";
 
 export default function Admin({ panelRole } = {}) {
   const [searchParams] = useSearchParams();
@@ -66,11 +67,13 @@ export default function Admin({ panelRole } = {}) {
   const showMembers = isSuperAdmin || isAdminRole || isReseller;
   const showGcash = isSuperAdmin || isAdminRole;
   const showStaff = isSuperAdmin || isAdminRole;
+  const showProfiles = isSuperAdmin || isAdminRole;
 
   const tabs = [
     ...(showOrders ? [{ id: "orders", label: `Orders${purchaseOrders.filter(o => o.status === "pending").length > 0 ? ` (${purchaseOrders.filter(o => o.status === "pending").length})` : ""}`, icon: ShoppingBag }] : []),
     ...(showTopups ? [{ id: "topups", label: `Top-ups${pendingTopups.length > 0 ? ` (${pendingTopups.length})` : ""}`, icon: Wallet }] : []),
     ...(showMembers ? [{ id: "members", label: `Members (${activeMembers.length})`, icon: Users }] : []),
+    ...(showProfiles ? [{ id: "profiles", label: "My Profile", icon: UserCog }] : []),
     ...(showStaff ? [{ id: "staff", label: `Staff${staffMembers.length > 0 ? ` (${staffMembers.length})` : ""}`, icon: Briefcase }] : []),
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
     { id: "joytel_screenshots", label: `JoyTel Screenshots${joytelScreenshots.length > 0 ? ` (${joytelScreenshots.length})` : ""}`, icon: Camera },
@@ -482,6 +485,11 @@ export default function Admin({ panelRole } = {}) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* My Profile Tab */}
+      {tab === "profiles" && (
+        <AdminProfilesTab members={activeMembers} transactions={transactions} onUpdated={updateLocalMember} />
       )}
 
       {/* Staff Tab */}

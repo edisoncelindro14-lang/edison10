@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, ArrowRight, Save } from "lucide-react";
+import { User, ArrowRight, Save, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useCurrentMember, updateRecord } from "../lib/useData";
 import { Button, Input, Label } from "./ui";
@@ -12,6 +12,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const [initialized, setInitialized] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
 
   useEffect(() => {
     if (currentMember && !initialized) {
@@ -22,6 +23,7 @@ export default function Profile() {
         address: currentMember.address || "",
         gcash_number: currentMember.gcash_number || "",
         gcash_name: currentMember.gcash_name || "",
+        password: currentMember.password || "",
       });
       setInitialized(true);
     }
@@ -55,7 +57,7 @@ export default function Profile() {
   ];
 
   async function save() {
-    const allFields = [...fields, ...gcashFields];
+    const allFields = [...fields, ...gcashFields, { key: "password", label: "Password" }];
     const missing = allFields.filter(f => !String(form[f.key] || "").trim());
     if (missing.length > 0) {
       toast.error(`Please fill out: ${missing.map(f => f.label).join(", ")}`);
@@ -127,6 +129,26 @@ export default function Profile() {
               <Input value={form[f.key]} onChange={update(f.key)} placeholder={f.placeholder || ""} required />
             </div>
           ))}
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 mb-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Account Password</h2>
+        <p className="text-sm text-gray-500 mb-4">View or change the password you use to log in.</p>
+        <div>
+          <Label>Password</Label>
+          <div className="relative">
+            <Input value={form.password} onChange={update("password")} type={showPwd ? "text" : "password"} className="pr-11" required />
+            <button
+              type="button"
+              onClick={() => setShowPwd(s => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              title={showPwd ? "Hide password" : "Show password"}
+            >
+              {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
       </motion.div>
 
