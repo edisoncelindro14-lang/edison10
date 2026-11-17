@@ -62,7 +62,8 @@ export default function Admin({ panelRole } = {}) {
   });
 
   const showOrders = isSuperAdmin || isAdminRole;
-  const showTopups = isSuperAdmin || isAdminRole || isReseller;
+  const topupsJoytelOrdersHidden = allSettings.find(s => s.setting_key === "topups_joytel_orders_hidden")?.setting_value === "true";
+  const showTopups = (isSuperAdmin || isAdminRole || isReseller) && !topupsJoytelOrdersHidden;
   const showMembers = isSuperAdmin || isAdminRole || isReseller;
   const showGcash = isSuperAdmin || isAdminRole;
   const showStaff = isSuperAdmin || isAdminRole;
@@ -267,6 +268,22 @@ export default function Admin({ panelRole } = {}) {
         await createRecord("system_settings", { setting_key: "export_csv_hidden", setting_value: newValue });
       }
       toast.success(newValue === "true" ? "Export CSV button hidden" : "Export CSV button visible");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function toggleTopupsJoytelOrdersHidden() {
+    const existing = allSettings.find(s => s.setting_key === "topups_joytel_orders_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "topups_joytel_orders_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "Top-ups tab and JoyTel Orders hidden" : "Top-ups tab and JoyTel Orders visible");
       window.location.reload();
     } catch (err) {
       toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
@@ -755,6 +772,24 @@ export default function Admin({ panelRole } = {}) {
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isDokAccount && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="w-5 h-5 text-orange-500" /> Top-ups &amp; JoyTel Orders Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide Top-ups Tab &amp; JoyTel Orders</p>
+                  <p className="text-sm text-gray-500">Hide the Top-ups tab in this panel and the JoyTel Orders link in the navigation menu.</p>
+                </div>
+                <button
+                  onClick={toggleTopupsJoytelOrdersHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${topupsJoytelOrdersHidden ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${topupsJoytelOrdersHidden ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
               </div>
             </div>
