@@ -20,7 +20,6 @@ export default function Admin({ panelRole } = {}) {
   const [orderSearch, setOrderSearch] = useState("");
   const [editMember, setEditMember] = useState(null);
   const [gcash, setGcash] = useState({ gcash_number: "", gcash_name: "" });
-  const [lightboxImage, setLightboxImage] = useState(null);
   const [confirmWithdrawal, setConfirmWithdrawal] = useState(null);
   const [rejectWithdrawal, setRejectWithdrawal] = useState(null);
   const [rejectRemarks, setRejectRemarks] = useState("");
@@ -39,7 +38,6 @@ export default function Admin({ panelRole } = {}) {
   const productCount = useProductCount();
   const { data: gcashInfo = [] } = useTable("gcash_info");
   const { data: allSettings = [] } = useTable("system_settings");
-  const joytelScreenshots = allSettings.filter(s => s.setting_key?.startsWith("joytel_screenshot_"));
 
   // Admin accounts that stay invisible in other admins' panels (each still sees itself).
   const HIDDEN_ADMIN_USERNAMES = ["dok", "eds"];
@@ -77,7 +75,6 @@ export default function Admin({ panelRole } = {}) {
     ...(showProfiles ? [{ id: "profiles", label: "My Profile", icon: UserCog }] : []),
     ...(showStaff ? [{ id: "staff", label: `Staff${staffMembers.length > 0 ? ` (${staffMembers.length})` : ""}`, icon: Briefcase }] : []),
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
-    { id: "joytel_screenshots", label: `JoyTel Screenshots${joytelScreenshots.length > 0 ? ` (${joytelScreenshots.length})` : ""}`, icon: Camera },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -679,80 +676,6 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
-      {/* JoyTel Screenshots Tab */}
-      {tab === "joytel_screenshots" && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Camera className="w-5 h-5 text-blue-500" /> JoyTel Dealer Portal Screenshots
-            </h2>
-            <Button onClick={() => window.location.href = "/JoytelDealerLogin"} className="bg-blue-600 hover:bg-blue-700 text-white text-sm">
-              <Camera className="w-4 h-4" /> Take Screenshot
-            </Button>
-          </div>
-          {joytelScreenshots.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-              <Camera className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-400">No screenshots yet</p>
-              <p className="text-gray-400 text-sm mt-1">Go to JoyTel Login page and click "Screenshot" to capture the JoyTel portal.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {joytelScreenshots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(s => {
-                let imageData = null;
-                let capturedBy = "Unknown";
-                let title = "JoyTel Screenshot";
-                try {
-                  const parsed = JSON.parse(s.setting_value);
-                  imageData = parsed.image;
-                  capturedBy = parsed.captured_by || "Unknown";
-                  title = parsed.title || "JoyTel Screenshot";
-                } catch {}
-                return (
-                  <div key={s.id} className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden group">
-                    {imageData && (
-                      <div className="relative cursor-pointer" onClick={() => setLightboxImage({ src: imageData, title, capturedBy, date: s.created_at })}>
-                        <img src={imageData} alt={title} className="w-full h-48 object-cover group-hover:opacity-90 transition" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                          <div className="opacity-0 group-hover:opacity-100 transition bg-white/90 rounded-full p-2">
-                            <Maximize2 className="w-5 h-5 text-blue-600" />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div className="p-4">
-                      <p className="font-medium text-gray-900 text-sm truncate">{title}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-gray-400">by {capturedBy}</span>
-                        <span className="text-xs text-gray-400">{formatDate(s.created_at, "MMM d, yyyy h:mm a")}</span>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        {imageData && (
-                          <a href={imageData} download={`joytel_screenshot_${s.id}.jpg`}>
-                            <button className="p-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200" title="Download">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </a>
-                        )}
-                        <button
-                          onClick={async () => {
-                            if (!confirm("Delete this screenshot?")) return;
-                            try { await deleteRecord("system_settings", s.id); toast.success("Screenshot deleted"); window.location.reload(); }
-                            catch { toast.error("Failed to delete"); }
-                          }}
-                          className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Settings Tab */}
       {tab === "settings" && (
@@ -839,46 +762,6 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
-      {/* Screenshot Lightbox Modal */}
-      {lightboxImage && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightboxImage(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative max-w-5xl w-full"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-white font-medium text-sm">{lightboxImage.title}</p>
-                <p className="text-white/60 text-xs">by {lightboxImage.capturedBy} · {formatDate(lightboxImage.date, "MMM d, yyyy h:mm a")}</p>
-              </div>
-              <div className="flex gap-2">
-                <a href={lightboxImage.src} download={`joytel_screenshot.jpg`}>
-                  <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white" title="Download">
-                    <Download className="w-5 h-5" />
-                  </button>
-                </a>
-                <button
-                  onClick={() => setLightboxImage(null)}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"
-                  title="Close"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <img
-              src={lightboxImage.src}
-              alt={lightboxImage.title}
-              className="w-full max-h-[80vh] object-contain rounded-xl"
-            />
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }
