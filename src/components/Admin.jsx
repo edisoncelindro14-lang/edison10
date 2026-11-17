@@ -257,6 +257,22 @@ export default function Admin({ panelRole } = {}) {
     }
   }
 
+  async function toggleExportCsvHidden() {
+    const existing = allSettings.find(s => s.setting_key === "export_csv_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "export_csv_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "Export CSV button hidden" : "Export CSV button visible");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
   function exportCSV() {
     const headers = ["Full Name", "Username", "Email", "Phone", "Role", "Status", "Balance", "Joined"];
     const rows = activeMembers.map(m => [m.full_name, m.username, m.email || "", m.phone || "", m.role, m.status, m.available_balance || 0, m.created_date ? formatDate(m.created_date, "MMM d, yyyy") : ""]);
@@ -288,9 +304,11 @@ export default function Admin({ panelRole } = {}) {
             </p>
           </div>
         </div>
-        <Button onClick={exportCSV} className="bg-teal-600 hover:bg-teal-700 text-white">
-          <Download className="w-4 h-4 mr-2" /> Export CSV
-        </Button>
+        {allSettings.find(s => s.setting_key === "export_csv_hidden")?.setting_value !== "true" && (
+          <Button onClick={exportCSV} className="bg-teal-600 hover:bg-teal-700 text-white">
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+        )}
       </motion.div>
 
       {/* Stats */}
@@ -737,6 +755,24 @@ export default function Admin({ panelRole } = {}) {
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isDokAccount && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Download className="w-5 h-5 text-teal-600" /> Export Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide Export CSV Button</p>
+                  <p className="text-sm text-gray-500">Hide the Export CSV button in the admin panel header.</p>
+                </div>
+                <button
+                  onClick={toggleExportCsvHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "export_csv_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "export_csv_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
               </div>
             </div>
