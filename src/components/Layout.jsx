@@ -49,7 +49,8 @@ export default function Layout({ children, currentPageName }) {
   let items = [...NAV_ITEMS];
   if (isDokAccount || memberRole === "super_admin") items = [...items, ...SUPER_ADMIN_ITEMS];
   if (isDokAccount || memberRole === "super_admin" || memberRole === "admin") items = [...items, ...ADMIN_ITEMS];
-  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...RESELLER_ITEMS];
+  const resellerItems = joytelOrdersHidden ? [] : RESELLER_ITEMS;
+  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...resellerItems];
   const HIDDEN_JOYTEL_PATHS = ["JoytelDashboard", "JoytelTest", "JoytelDealerLogin", ...(joytelOrdersHidden ? ["JoytelOrders"] : [])];
   const joytelItems = JOYTEL_ITEMS.filter(i => !(joytelPagesHidden && HIDDEN_JOYTEL_PATHS.includes(i.path)));
   if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...joytelItems];

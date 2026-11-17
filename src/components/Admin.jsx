@@ -289,7 +289,7 @@ export default function Admin({ panelRole } = {}) {
       } else {
         await createRecord("system_settings", { setting_key: "topups_joytel_orders_hidden", setting_value: newValue });
       }
-      toast.success(newValue === "true" ? "Top-ups tab and JoyTel Orders hidden" : "Top-ups tab and JoyTel Orders visible");
+      toast.success(newValue === "true" ? "Top-ups, JoyTel Orders and Reseller Panel hidden" : "Top-ups, JoyTel Orders and Reseller Panel visible");
       window.location.reload();
     } catch (err) {
       toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
@@ -785,11 +785,11 @@ export default function Admin({ panelRole } = {}) {
 
           {isDokAccount && (
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="w-5 h-5 text-orange-500" /> Top-ups &amp; JoyTel Orders Visibility</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="w-5 h-5 text-orange-500" /> Tabs &amp; Reseller Visibility</h2>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Hide Top-ups Tab &amp; JoyTel Orders</p>
-                  <p className="text-sm text-gray-500">Hide the Top-ups tab in this panel and the JoyTel Orders link in the navigation menu.</p>
+                  <p className="font-medium text-gray-900">Hide Top-ups Tab, JoyTel Orders &amp; Reseller Panel</p>
+                  <p className="text-sm text-gray-500">Hide the Top-ups tab in this panel, plus the JoyTel Orders and Reseller Panel links and reseller shortcuts everywhere.</p>
                 </div>
                 <button
                   onClick={toggleTopupsJoytelOrdersHidden}
