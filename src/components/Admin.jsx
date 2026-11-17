@@ -51,6 +51,12 @@ export default function Admin({ panelRole } = {}) {
 
   const totalProducts = productCount ?? FALLBACK_PRODUCTS.length;
   const purchaseOrders = transactions.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // Orders tab hides the old September transaction history
+  const isSeptemberHistory = (t) => {
+    const d = new Date(t.created_at || t.created_date);
+    return d.getFullYear() === 2026 && d.getMonth() === 8;
+  };
+  const visibleOrders = purchaseOrders.filter(o => !isSeptemberHistory(o));
   const pendingTopups = topupReqs.filter(r => r.status === "pending").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const staffMembers = activeMembers.filter(m => m.role === "staff");
   const pendingStaffWithdrawals = transactions.filter(t => t.type === "withdrawal" && t.status === "pending" && staffMembers.some(s => s.id === t.member_id)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -373,8 +379,8 @@ export default function Admin({ panelRole } = {}) {
                 {["Order #", "Customer", "Details", "Amount", "Status", "Date", "Actions"].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
               </tr></thead>
               <tbody>
-                {purchaseOrders.length === 0 ? <tr><td colSpan="7" className="text-center py-12 text-gray-400">No orders yet</td></tr> :
-                purchaseOrders.filter(o => {
+                {visibleOrders.length === 0 ? <tr><td colSpan="7" className="text-center py-12 text-gray-400">No orders yet</td></tr> :
+                visibleOrders.filter(o => {
                   if (!orderSearch) return true;
                   const q = orderSearch.toLowerCase();
                   const member = members.find(m => m.id === o.member_id);
