@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X,
-  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase,
+  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase, ShoppingCart,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useProductCount, updateRecord, createRecord, deleteRecord } from "../lib/useData";
@@ -238,6 +238,22 @@ export default function Admin({ panelRole } = {}) {
         await createRecord("system_settings", { setting_key: "joytel_pages_hidden", setting_value: newValue });
       }
       toast.success(newValue === "true" ? "JoyTel pages hidden from the menu" : "JoyTel pages visible in the menu");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function toggleBestSellersHidden() {
+    const existing = allSettings.find(s => s.setting_key === "best_sellers_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "best_sellers_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "Best Sellers section hidden" : "Best Sellers section visible");
       window.location.reload();
     } catch (err) {
       toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
@@ -780,6 +796,24 @@ export default function Admin({ panelRole } = {}) {
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "bg-blue-600" : "bg-gray-300"}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isSuperAdmin && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-indigo-500" /> Online Shop Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide Best Sellers Section</p>
+                  <p className="text-sm text-gray-500">Toggle the Best Sellers section off in the online shop.</p>
+                </div>
+                <button
+                  onClick={toggleBestSellersHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
               </div>
             </div>

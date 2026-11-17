@@ -137,6 +137,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const { data: members = [] } = useTable("members", { enabled: !readOnly });
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions", { enabled: !readOnly });
+  const { data: shopSettings = [] } = useTable("system_settings");
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
@@ -177,6 +178,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const featured = orderedProducts.slice(0, 4);
   const bestSellers = orderedProducts.filter(p => getProductBadge(p) === "best_seller").slice(0, 5);
   const bestSellerList = bestSellers.length > 0 ? bestSellers : orderedProducts.slice(4, 9);
+  // Admin toggle in the panel's Settings tab hides the Best Sellers section.
+  const bestSellersHidden = shopSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true";
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
@@ -348,7 +351,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
       </section>
 
       {/* Best Sellers */}
-      {bestSellerList.length > 0 && (
+      {!bestSellersHidden && bestSellerList.length > 0 && (
         <section className="mb-10">
           <div className="mb-4">
             <p className="text-xs font-bold text-indigo-600 uppercase">Trending Now</p>
