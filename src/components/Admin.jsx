@@ -33,6 +33,7 @@ export default function Admin({ panelRole } = {}) {
   const isSuperAdmin = currentUserRole === "super_admin";
   const isAdminRole = currentUserRole === "admin";
   const isReseller = currentUserRole === "reseller";
+  const isDokAccount = currentMember?.username === "dok";
   const { data: transactions = [], addLocalRecord: addLocalTx, updateLocalRecord: updateLocalTx } = useTable("transactions");
   const { data: topupReqs = [], updateLocalRecord: updateLocalTopup } = useTable("conversion_requests");
   const productCount = useProductCount();
@@ -225,6 +226,22 @@ export default function Admin({ panelRole } = {}) {
       setGcash({ gcash_number: "", gcash_name: "" });
       window.location.reload();
     } catch { toast.error("Failed to save GCash info"); }
+  }
+
+  async function toggleJoytelHidden() {
+    const existing = allSettings.find(s => s.setting_key === "joytel_pages_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "joytel_pages_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "JoyTel pages hidden from the menu" : "JoyTel pages visible in the menu");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
   }
 
   function exportCSV() {
@@ -763,6 +780,24 @@ export default function Admin({ panelRole } = {}) {
                   className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "bg-blue-600" : "bg-gray-300"}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isDokAccount && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-blue-500" /> JoyTel Menu Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide JoyTel Pages</p>
+                  <p className="text-sm text-gray-500">Hide JoyTel Dashboard, JoyTel Test and JoyTel Login from the navigation menu.</p>
+                </div>
+                <button
+                  onClick={toggleJoytelHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "joytel_pages_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "joytel_pages_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
               </div>
             </div>
