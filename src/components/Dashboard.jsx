@@ -11,6 +11,8 @@ export default function Dashboard() {
   const { data: members = [], isLoading } = useTable("members");
   const { data: transactions = [] } = useTable("transactions");
   const { data: products = [], isLoading: productsLoading } = useProductPage({ pageSize: 6, activeOnly: true });
+  const { data: allSettings = [] } = useTable("system_settings");
+  const resellerPanelHidden = allSettings.find(s => s.setting_key === "topups_joytel_orders_hidden")?.setting_value === "true";
   const { currentMember } = useCurrentMember(members);
 
   const allProducts = products.length > 0 ? products : (!productsLoading ? FALLBACK_PRODUCTS : []);
@@ -29,7 +31,7 @@ export default function Dashboard() {
     { label: "Reseller Panel", desc: "Manage your products", icon: Store, path: "/ResellerPanel", color: "from-teal-500 to-emerald-600", roles: ["super_admin", "admin", "reseller"] },
   ];
   const myRole = currentMember?.role;
-  const accessiblePanels = myRole ? allPanels.filter(p => p.roles.includes(myRole)) : [];
+  const accessiblePanels = myRole ? allPanels.filter(p => p.roles.includes(myRole) && !(resellerPanelHidden && p.path === "/ResellerPanel")) : [];
 
   if (!currentMember && !isLoading) {
     return (

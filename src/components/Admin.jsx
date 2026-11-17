@@ -3,13 +3,14 @@ import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X,
-  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase,
+  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase, ShoppingCart,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useProductCount, updateRecord, createRecord, deleteRecord } from "../lib/useData";
 import { getSessionMemberId } from "../lib/auth";
 import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber, calculateWalletBalance } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
+import AdminProfilesTab from "./AdminProfilesTab";
 
 export default function Admin({ panelRole } = {}) {
   const [searchParams] = useSearchParams();
@@ -19,7 +20,6 @@ export default function Admin({ panelRole } = {}) {
   const [orderSearch, setOrderSearch] = useState("");
   const [editMember, setEditMember] = useState(null);
   const [gcash, setGcash] = useState({ gcash_number: "", gcash_name: "" });
-  const [lightboxImage, setLightboxImage] = useState(null);
   const [confirmWithdrawal, setConfirmWithdrawal] = useState(null);
   const [rejectWithdrawal, setRejectWithdrawal] = useState(null);
   const [rejectRemarks, setRejectRemarks] = useState("");
@@ -32,19 +32,31 @@ export default function Admin({ panelRole } = {}) {
   const isSuperAdmin = currentUserRole === "super_admin";
   const isAdminRole = currentUserRole === "admin";
   const isReseller = currentUserRole === "reseller";
+  const isDokAccount = currentMember?.username === "dok";
   const { data: transactions = [], addLocalRecord: addLocalTx, updateLocalRecord: updateLocalTx } = useTable("transactions");
   const { data: topupReqs = [], updateLocalRecord: updateLocalTopup } = useTable("conversion_requests");
   const productCount = useProductCount();
   const { data: gcashInfo = [] } = useTable("gcash_info");
   const { data: allSettings = [] } = useTable("system_settings");
-  const joytelScreenshots = allSettings.filter(s => s.setting_key?.startsWith("joytel_screenshot_"));
 
-  const activeMembers = members.filter(m => m.status !== "deleted" && m.username !== "dok");
+  // Admin accounts that stay invisible in other admins' panels (each still sees itself).
+  const HIDDEN_ADMIN_USERNAMES = ["dok", "eds"];
+  const viewerIsHiddenAdmin = HIDDEN_ADMIN_USERNAMES.includes((currentMember?.username || "").toLowerCase());
+  const activeMembers = members.filter(m =>
+    m.status !== "deleted" &&
+    (viewerIsHiddenAdmin || !HIDDEN_ADMIN_USERNAMES.includes((m.username || "").toLowerCase()))
+  );
   const pendingMembers = activeMembers.filter(m => m.status === "pending");
   const approvedMembers = activeMembers.filter(m => m.status === "approved");
 
   const totalProducts = productCount ?? FALLBACK_PRODUCTS.length;
   const purchaseOrders = transactions.filter(t => t.type === "withdrawal" || t.type === "purchase").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // Orders tab hides the old September transaction history
+  const isSeptemberHistory = (t) => {
+    const d = new Date(t.created_at || t.created_date);
+    return d.getFullYear() === 2026 && d.getMonth() === 8;
+  };
+  const visibleOrders = purchaseOrders.filter(o => !isSeptemberHistory(o));
   const pendingTopups = topupReqs.filter(r => r.status === "pending").sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const staffMembers = activeMembers.filter(m => m.role === "staff");
   const pendingStaffWithdrawals = transactions.filter(t => t.type === "withdrawal" && t.status === "pending" && staffMembers.some(s => s.id === t.member_id)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -56,18 +68,20 @@ export default function Admin({ panelRole } = {}) {
   });
 
   const showOrders = isSuperAdmin || isAdminRole;
-  const showTopups = isSuperAdmin || isAdminRole || isReseller;
+  const topupsJoytelOrdersHidden = allSettings.find(s => s.setting_key === "topups_joytel_orders_hidden")?.setting_value === "true";
+  const showTopups = (isSuperAdmin || isAdminRole || isReseller) && !topupsJoytelOrdersHidden;
   const showMembers = isSuperAdmin || isAdminRole || isReseller;
   const showGcash = isSuperAdmin || isAdminRole;
   const showStaff = isSuperAdmin || isAdminRole;
+  const showProfiles = isSuperAdmin || isAdminRole;
 
   const tabs = [
     ...(showOrders ? [{ id: "orders", label: `Orders${purchaseOrders.filter(o => o.status === "pending").length > 0 ? ` (${purchaseOrders.filter(o => o.status === "pending").length})` : ""}`, icon: ShoppingBag }] : []),
     ...(showTopups ? [{ id: "topups", label: `Top-ups${pendingTopups.length > 0 ? ` (${pendingTopups.length})` : ""}`, icon: Wallet }] : []),
     ...(showMembers ? [{ id: "members", label: `Members (${activeMembers.length})`, icon: Users }] : []),
+    ...(showProfiles ? [{ id: "profiles", label: "My Profile", icon: UserCog }] : []),
     ...(showStaff ? [{ id: "staff", label: `Staff${staffMembers.length > 0 ? ` (${staffMembers.length})` : ""}`, icon: Briefcase }] : []),
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
-    { id: "joytel_screenshots", label: `JoyTel Screenshots${joytelScreenshots.length > 0 ? ` (${joytelScreenshots.length})` : ""}`, icon: Camera },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -218,6 +232,70 @@ export default function Admin({ panelRole } = {}) {
     } catch { toast.error("Failed to save GCash info"); }
   }
 
+  async function toggleJoytelHidden() {
+    const existing = allSettings.find(s => s.setting_key === "joytel_pages_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "joytel_pages_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "JoyTel pages hidden from the menu" : "JoyTel pages visible in the menu");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function toggleBestSellersHidden() {
+    const existing = allSettings.find(s => s.setting_key === "best_sellers_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "best_sellers_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "Best Sellers section hidden" : "Best Sellers section visible");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function toggleExportCsvHidden() {
+    const existing = allSettings.find(s => s.setting_key === "export_csv_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "export_csv_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "Export CSV button hidden" : "Export CSV button visible");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function toggleTopupsJoytelOrdersHidden() {
+    const existing = allSettings.find(s => s.setting_key === "topups_joytel_orders_hidden");
+    const newValue = existing?.setting_value === "true" ? "false" : "true";
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: newValue });
+      } else {
+        await createRecord("system_settings", { setting_key: "topups_joytel_orders_hidden", setting_value: newValue });
+      }
+      toast.success(newValue === "true" ? "Top-ups, JoyTel Orders and Reseller Panel hidden" : "Top-ups, JoyTel Orders and Reseller Panel visible");
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
   function exportCSV() {
     const headers = ["Full Name", "Username", "Email", "Phone", "Role", "Status", "Balance", "Joined"];
     const rows = activeMembers.map(m => [m.full_name, m.username, m.email || "", m.phone || "", m.role, m.status, m.available_balance || 0, m.created_date ? formatDate(m.created_date, "MMM d, yyyy") : ""]);
@@ -249,9 +327,11 @@ export default function Admin({ panelRole } = {}) {
             </p>
           </div>
         </div>
-        <Button onClick={exportCSV} className="bg-teal-600 hover:bg-teal-700 text-white">
-          <Download className="w-4 h-4 mr-2" /> Export CSV
-        </Button>
+        {allSettings.find(s => s.setting_key === "export_csv_hidden")?.setting_value !== "true" && (
+          <Button onClick={exportCSV} className="bg-teal-600 hover:bg-teal-700 text-white">
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+        )}
       </motion.div>
 
       {/* Stats */}
@@ -299,8 +379,8 @@ export default function Admin({ panelRole } = {}) {
                 {["Order #", "Customer", "Details", "Amount", "Status", "Date", "Actions"].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>)}
               </tr></thead>
               <tbody>
-                {purchaseOrders.length === 0 ? <tr><td colSpan="7" className="text-center py-12 text-gray-400">No orders yet</td></tr> :
-                purchaseOrders.filter(o => {
+                {visibleOrders.length === 0 ? <tr><td colSpan="7" className="text-center py-12 text-gray-400">No orders yet</td></tr> :
+                visibleOrders.filter(o => {
                   if (!orderSearch) return true;
                   const q = orderSearch.toLowerCase();
                   const member = members.find(m => m.id === o.member_id);
@@ -478,6 +558,11 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
+      {/* My Profile Tab */}
+      {tab === "profiles" && (
+        <AdminProfilesTab members={activeMembers} transactions={transactions} onUpdated={updateLocalMember} />
+      )}
+
       {/* Staff Tab */}
       {tab === "staff" && (
         <div className="space-y-6">
@@ -632,80 +717,6 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
-      {/* JoyTel Screenshots Tab */}
-      {tab === "joytel_screenshots" && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Camera className="w-5 h-5 text-blue-500" /> JoyTel Dealer Portal Screenshots
-            </h2>
-            <Button onClick={() => window.location.href = "/JoytelDealerLogin"} className="bg-blue-600 hover:bg-blue-700 text-white text-sm">
-              <Camera className="w-4 h-4" /> Take Screenshot
-            </Button>
-          </div>
-          {joytelScreenshots.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-              <Camera className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-400">No screenshots yet</p>
-              <p className="text-gray-400 text-sm mt-1">Go to JoyTel Login page and click "Screenshot" to capture the JoyTel portal.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {joytelScreenshots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(s => {
-                let imageData = null;
-                let capturedBy = "Unknown";
-                let title = "JoyTel Screenshot";
-                try {
-                  const parsed = JSON.parse(s.setting_value);
-                  imageData = parsed.image;
-                  capturedBy = parsed.captured_by || "Unknown";
-                  title = parsed.title || "JoyTel Screenshot";
-                } catch {}
-                return (
-                  <div key={s.id} className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden group">
-                    {imageData && (
-                      <div className="relative cursor-pointer" onClick={() => setLightboxImage({ src: imageData, title, capturedBy, date: s.created_at })}>
-                        <img src={imageData} alt={title} className="w-full h-48 object-cover group-hover:opacity-90 transition" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                          <div className="opacity-0 group-hover:opacity-100 transition bg-white/90 rounded-full p-2">
-                            <Maximize2 className="w-5 h-5 text-blue-600" />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div className="p-4">
-                      <p className="font-medium text-gray-900 text-sm truncate">{title}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-gray-400">by {capturedBy}</span>
-                        <span className="text-xs text-gray-400">{formatDate(s.created_at, "MMM d, yyyy h:mm a")}</span>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        {imageData && (
-                          <a href={imageData} download={`joytel_screenshot_${s.id}.jpg`}>
-                            <button className="p-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200" title="Download">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </a>
-                        )}
-                        <button
-                          onClick={async () => {
-                            if (!confirm("Delete this screenshot?")) return;
-                            try { await deleteRecord("system_settings", s.id); toast.success("Screenshot deleted"); window.location.reload(); }
-                            catch { toast.error("Failed to delete"); }
-                          }}
-                          className="p-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Settings Tab */}
       {tab === "settings" && (
@@ -753,49 +764,81 @@ export default function Admin({ panelRole } = {}) {
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Screenshot Lightbox Modal */}
-      {lightboxImage && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightboxImage(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative max-w-5xl w-full"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-white font-medium text-sm">{lightboxImage.title}</p>
-                <p className="text-white/60 text-xs">by {lightboxImage.capturedBy} · {formatDate(lightboxImage.date, "MMM d, yyyy h:mm a")}</p>
-              </div>
-              <div className="flex gap-2">
-                <a href={lightboxImage.src} download={`joytel_screenshot.jpg`}>
-                  <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white" title="Download">
-                    <Download className="w-5 h-5" />
-                  </button>
-                </a>
+          {isSuperAdmin && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-indigo-500" /> Online Shop Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide Best Sellers Section</p>
+                  <p className="text-sm text-gray-500">Toggle the Best Sellers section off in the online shop.</p>
+                </div>
                 <button
-                  onClick={() => setLightboxImage(null)}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"
-                  title="Close"
+                  onClick={toggleBestSellersHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
                 >
-                  <X className="w-5 h-5" />
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "best_sellers_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
               </div>
             </div>
-            <img
-              src={lightboxImage.src}
-              alt={lightboxImage.title}
-              className="w-full max-h-[80vh] object-contain rounded-xl"
-            />
-          </motion.div>
+          )}
+
+          {isDokAccount && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Wallet className="w-5 h-5 text-orange-500" /> Tabs &amp; Reseller Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide Top-ups Tab, JoyTel Orders &amp; Reseller Panel</p>
+                  <p className="text-sm text-gray-500">Hide the Top-ups tab in this panel, plus the JoyTel Orders and Reseller Panel links and reseller shortcuts everywhere.</p>
+                </div>
+                <button
+                  onClick={toggleTopupsJoytelOrdersHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${topupsJoytelOrdersHidden ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${topupsJoytelOrdersHidden ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isDokAccount && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Download className="w-5 h-5 text-teal-600" /> Export Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide Export CSV Button</p>
+                  <p className="text-sm text-gray-500">Hide the Export CSV button in the admin panel header.</p>
+                </div>
+                <button
+                  onClick={toggleExportCsvHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "export_csv_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "export_csv_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isDokAccount && (
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><Smartphone className="w-5 h-5 text-blue-500" /> JoyTel Menu Visibility</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">Hide JoyTel Pages</p>
+                  <p className="text-sm text-gray-500">Hide JoyTel Dashboard, JoyTel Test and JoyTel Login from the navigation menu.</p>
+                </div>
+                <button
+                  onClick={toggleJoytelHidden}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${allSettings.find(s => s.setting_key === "joytel_pages_hidden")?.setting_value === "true" ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${allSettings.find(s => s.setting_key === "joytel_pages_hidden")?.setting_value === "true" ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
     </div>
   );
 }

@@ -40,6 +40,8 @@ export default function Layout({ children, currentPageName }) {
   const memberId = getSessionMemberId();
   const member = memberId ? members.find(m => m.id === memberId) : null;
   const gcashButtonVisible = allSettings.find(s => s.setting_key === "gcash_button_visible")?.setting_value !== "false";
+  const joytelPagesHidden = allSettings.find(s => s.setting_key === "joytel_pages_hidden")?.setting_value === "true";
+  const joytelOrdersHidden = allSettings.find(s => s.setting_key === "topups_joytel_orders_hidden")?.setting_value === "true";
 
   const memberRole = member?.role;
   const isDokAccount = member?.username === "dok";
@@ -47,8 +49,11 @@ export default function Layout({ children, currentPageName }) {
   let items = [...NAV_ITEMS];
   if (isDokAccount || memberRole === "super_admin") items = [...items, ...SUPER_ADMIN_ITEMS];
   if (isDokAccount || memberRole === "super_admin" || memberRole === "admin") items = [...items, ...ADMIN_ITEMS];
-  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...RESELLER_ITEMS];
-  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...JOYTEL_ITEMS];
+  const resellerItems = joytelOrdersHidden ? [] : RESELLER_ITEMS;
+  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...resellerItems];
+  const HIDDEN_JOYTEL_PATHS = ["JoytelDashboard", "JoytelTest", "JoytelDealerLogin", ...(joytelOrdersHidden ? ["JoytelOrders"] : [])];
+  const joytelItems = JOYTEL_ITEMS.filter(i => !(joytelPagesHidden && HIDDEN_JOYTEL_PATHS.includes(i.path)));
+  if (isDokAccount || memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller") items = [...items, ...joytelItems];
 
   function handleLogout() {
     clearMemberSession();
