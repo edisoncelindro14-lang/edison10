@@ -140,8 +140,9 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
-  const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [search, filterCategory, canSeeInactive]);
+  // Page 1 of the "All Products" grid is skipped, so browsing starts on page 2.
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, filterCategory, canSeeInactive]);
   // Featured / best sellers come from the first page of the curated order;
   // the "All Products" grid is paged + searched on the server (thousands of rows).
   const { data: topProducts = [], isLoading: topLoading, updateLocalRecord: updateTopLocal, refetch: refetchTop } =
@@ -362,7 +363,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
       {/* All Products */}
       <section id="all-products" className="mb-10 scroll-mt-20">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">All Products <span className="text-gray-400 text-base font-normal">({showFallback ? filtered.length : total} items)</span></h2>
+          <h2 className="text-2xl font-bold text-gray-900">All Products <span className="text-gray-400 text-base font-normal">({showFallback ? filtered.length : Math.max(0, total - PAGE_SIZE)} items)</span></h2>
           {canManage && <Button onClick={() => setEditProduct({})} className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="w-4 h-4" /> Add Product</Button>}
         </div>
 
@@ -383,9 +384,9 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
         </div>
-        {total > PAGE_SIZE && (
+        {total > PAGE_SIZE * 2 && (
           <div className="flex items-center justify-center gap-3 mt-8">
-            <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+            <Button variant="outline" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
             <span className="text-sm text-gray-500">Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
             <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
           </div>
