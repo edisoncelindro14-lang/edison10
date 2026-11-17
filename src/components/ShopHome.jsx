@@ -387,7 +387,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         {total > PAGE_SIZE * 2 && (
           <div className="flex items-center justify-center gap-3 mt-8">
             <Button variant="outline" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
-            <span className="text-sm text-gray-500">Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
+            <span className="text-sm text-gray-500">Page {page} of {Math.ceil(Math.max(0, total - PAGE_SIZE) / PAGE_SIZE)}</span>
             <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
           </div>
         )}
