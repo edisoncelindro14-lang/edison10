@@ -11,7 +11,7 @@ import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
-import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
+import { sortProductsByOrder } from "../lib/productSort";
 
 function StarRating({ rating, count }) {
   return (
@@ -144,8 +144,6 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
-  // Only admins/super_admins keep the curated (drag-and-drop) order; everyone else sees cheapest first.
-  const canReorder = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin");
   // Page 1 of the "All Products" grid is skipped, so browsing starts on page 2.
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [search, filterCategory, canSeeInactive]);
@@ -153,8 +151,10 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   // the "All Products" grid is paged + searched on the server (thousands of rows).
   const { data: topProducts = [], isLoading: topLoading, updateLocalRecord: updateTopLocal, refetch: refetchTop } =
     useProductPage({ activeOnly: !canSeeInactive, pageSize: 40 });
+  // SIM products are retired: keep the category tab but never list its cards.
+  const gridCategory = filterCategory === "sim" ? "__none__" : filterCategory;
   const { data: products = [], total, isLoading: productsLoading, refetch: refetchGrid, updateLocalRecord: updateGridLocal } =
-    useProductPage({ category: filterCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE, sort: canReorder ? "manual" : "price" });
+    useProductPage({ category: gridCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE, sort: "price" });
   const updateLocalRecord = (id, u) => { updateTopLocal(id, u); updateGridLocal(id, u); };
   const addLocalRecord = () => { refetchTop(); refetchGrid(); };
   const refetchProducts = () => { refetchTop(); refetchGrid(); };
@@ -173,11 +173,9 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const noFilters = !search;
   const showFallback = !topLoading && !productsLoading && total === 0 && noFilters;
   const orderedProducts = showFallback ? sortProductsByOrder(FALLBACK_PRODUCTS) : topProducts;
-  const filtered = showFallback
+  const filtered = showFallback && filterCategory !== "sim"
     ? orderedProducts.filter(p => p.category === filterCategory).sort((a, b) => getFinalPrice(a) - getFinalPrice(b))
     : products;
-  // Drag-to-reorder only makes sense when the whole list fits on one page.
-  const reorderable = canReorder && noFilters && total <= PAGE_SIZE;
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
@@ -204,28 +202,6 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     } else { refetchProducts(); }
     setEditProduct(null);
     requestAnimationFrame(() => window.scrollTo(0, scrollY));
-  }
-
-  function handleDragStart(e, id) { setDraggedId(id); e.dataTransfer.effectAllowed = "move"; }
-  function handleDragOver(e, id) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (id !== draggedId) setDragOverId(id); }
-  function handleDrop(e, targetId) {
-    e.preventDefault(); e.stopPropagation();
-    if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return; }
-    // Reorder within the full product list (not just the filtered view) so the
-    // saved sort_order is consistent across every device and deployment.
-    const fullOrder = orderedProducts.map(p => p.id);
-    const fromIdx = fullOrder.indexOf(draggedId);
-    const toIdx = fullOrder.indexOf(targetId);
-    if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return; }
-    const newOrder = [...fullOrder]; newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, draggedId);
-    // Optimistically reflect the new order locally, then persist to the server.
-    newOrder.forEach((id, i) => updateLocalRecord(id, { sort_order: i }));
-    setDraggedId(null); setDragOverId(null); setSortVersion(v => v + 1);
-    persistProductOrder(newOrder).catch(err => {
-      console.error("Failed to persist product order:", err);
-      toast.error("Could not save product order — showing the last saved layout.");
-      refetchProducts();
-    });
   }
 
   async function handleCheckout(paymentMethod) {
@@ -275,7 +251,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { canManage, canReorder: reorderable, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
+  const cardProps = { canManage, onEdit: setEditProduct, onAddToCart: addToCart };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
