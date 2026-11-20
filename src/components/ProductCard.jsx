@@ -166,7 +166,7 @@ export default function ProductCard({
         {/* Price + action */}
         <div className="flex shrink-0 flex-col items-end justify-between gap-2">
           <div className="text-right">
-            <p className={`font-extrabold tracking-tight text-gray-900 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>{money(finalPrice)}</p>
+            <p className={`font-extrabold tracking-tight text-gray-900 ${compact ? "text-base" : "text-xl sm:text-2xl"}`}>{money(finalPrice)}</p>
             {!compact && (product.discount_percent > 0 ? (
               <span className="text-[11px] text-gray-400 line-through">{money(product.price)}</span>
             ) : product.load_amount ? (
