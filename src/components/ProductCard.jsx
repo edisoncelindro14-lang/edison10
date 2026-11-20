@@ -179,10 +179,10 @@ export default function ProductCard({
               disabled={!isAvailable}
               onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
               className={`flex flex-shrink-0 items-center justify-center rounded-full shadow-md transition-all duration-200
-                ${compact ? "h-7 w-7" : "h-9 w-9"}
+                ${compact ? "h-8 w-8" : "h-10 w-10"}
                 ${isAvailable ? "bg-gray-900 text-white hover:scale-105 hover:bg-orange-500" : "cursor-not-allowed bg-gray-200 text-gray-400"}`}
             >
-              <ShoppingCart className={compact ? "w-3.5 h-3.5" : "w-4 h-4"} />
+              <ShoppingCart className={compact ? "w-4 h-4" : "w-5 h-5"} />
             </button>
           )}
         </div>

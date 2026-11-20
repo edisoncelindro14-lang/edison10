@@ -9,6 +9,7 @@ import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
   productCategory, joytelBadgeLabel, joytelTypeName, networkLabel, brandText } from "../lib/helpers";
 import { Button, Input } from "./ui";
+import { useCart } from "../lib/CartContext";
 import ProductCard from "./ProductCard";
 import ProductEditModal from "./ProductEditModal";
 
@@ -35,6 +36,12 @@ export default function ProductDetail({ productId }) {
   const { product: fetchedProduct, isLoading: productsLoading, updateLocalRecord } = useProduct(id);
   const { data: sameCategory = [] } = useProductPage({ category: fetchedProduct?.category || "all", pageSize: 6, activeOnly: true });
   const { currentMember } = useCurrentMember(members);
+  const { addToCart: cartAddToCart } = useCart();
+
+  function addRelatedToCart(item) {
+    cartAddToCart(item, priceAdjustments);
+    toast.success(`${item.name} added to cart`);
+  }
 
   // Prefill delivery details from the member's profile, unless they've edited them for this order
   useEffect(() => {
@@ -298,7 +305,7 @@ export default function ProductDetail({ productId }) {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Related Products</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {relatedProducts.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} adjustments={priceAdjustments} compact />
+              <ProductCard key={p.id} product={p} index={i} adjustments={priceAdjustments} onAddToCart={addRelatedToCart} compact />
             ))}
           </div>
         </section>
