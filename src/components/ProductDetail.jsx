@@ -7,7 +7,7 @@ import { useTable, useCurrentMember, useProduct, useProductPage } from "../lib/u
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
-  productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
+  productCategory, joytelBadgeLabel, joytelTypeName, networkLabel } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -157,7 +157,7 @@ export default function ProductDetail({ productId }) {
             <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full capitalize">
               <Store className="w-3 h-3" /> {productCategory(product)}
             </span>
-            {product.network && <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{product.network}</span>}
+            {product.network && <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{networkLabel(product.network)}</span>}
             {!isAvailable && <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Unavailable</span>}
           </div>
 
@@ -183,12 +183,12 @@ export default function ProductDetail({ productId }) {
 
           {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{product.description}</p>}
 
-          {/* JoyTel order details */}
-          {product.joytel_enabled && (
+          {/* Kabaro order details (admin only) */}
+          {canManage && product.joytel_enabled && (
             <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
               <div className="flex items-center gap-2 mb-2">
                 <Radio className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-bold text-blue-700">JoyTel Product</span>
+                <span className="text-sm font-bold text-blue-700">Kabaro Product</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {product.joytel_product_code && (

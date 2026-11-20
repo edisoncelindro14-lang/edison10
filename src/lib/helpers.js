@@ -160,3 +160,5 @@ export const productCategory = p => (isJoytelRecharge(p) ? "load" : p?.category 
 export const joytelBadgeLabel = p => (isJoytelRecharge(p) ? "Load" : Number(p?.joytel_type) === 1 ? "SIM" : "eSIM");
 /** Long JoyTel type name for product details (Physical SIM, eSIM or Load). */
 export const joytelTypeName = p => (isJoytelRecharge(p) ? "Load" : Number(p?.joytel_type) === 1 ? "Physical SIM" : "eSIM");
+/** Network label shown in the shop: JoyTel products are branded as Kabaro. */
+export const networkLabel = n => (n === "JoyTel" ? "Kabaro" : n);
