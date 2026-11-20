@@ -8,6 +8,16 @@ import {
   productCategory, joytelBadgeLabel, joytelTypeName, brandText,
 } from "../lib/helpers";
 
+// Cards show the country/product only, without the "JOY SIM Recharge" prefix.
+function cardName(name) {
+  return brandText(name)
+    .replace(/joy\s*sim\s*recharge/gi, "")
+    .replace(/\s*[-–—]\s*$/, "")
+    .replace(/^\s*[-–—]\s*/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim() || brandText(name);
+}
+
 function StarRating({ rating, count }) {
   return (
     <div className="flex items-center gap-1">
@@ -116,7 +126,7 @@ export default function ProductCard({
         {/* Details */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-1.5">
-            <p className={`truncate font-bold text-gray-900 ${compact ? "text-sm" : "text-sm sm:text-[15px]"}`}>{brandText(product.name)}</p>
+            <p className={`font-bold text-gray-900 ${compact ? "truncate text-sm" : "line-clamp-2 break-words text-sm sm:text-[15px]"}`}>{cardName(product.name)}</p>
             {showJoytelBadge && product.joytel_enabled && (
               <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700 ring-1 ring-blue-100">
                 <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}
