@@ -6,7 +6,8 @@ import toast from "react-hot-toast";
 import { useTable, useCurrentMember, useProduct, useProductPage } from "../lib/useData";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+  productCategory, joytelBadgeLabel, joytelTypeName, networkLabel, brandText } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -17,6 +18,8 @@ export default function ProductDetail({ productId }) {
   const [qty, setQty] = useState(1);
   const [mobileNumber, setMobileNumber] = useState("");
   const [serial, setSerial] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailEdited, setEmailEdited] = useState(false);
   const [address, setAddress] = useState("");
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
@@ -33,6 +36,7 @@ export default function ProductDetail({ productId }) {
   useEffect(() => {
     if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
     if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+    if (currentMember && !emailEdited) setEmail(currentMember.email || "");
   }, [currentMember?.id]);
 
   const memberRole = currentMember?.role;
@@ -60,10 +64,11 @@ export default function ProductDetail({ productId }) {
 
   const finalPrice = getFinalPrice(product);
   const total = finalPrice * qty;
-  const hasLoad = product.category === "load";
-  const hasSim = product.category === "sim";
+  const hasLoad = productCategory(product) === "load";
+  const hasSim = productCategory(product) === "sim";
   const hasMobile = needsMobile(product);
   const hasSerial = isJoytelRecharge(product);
+  const hasEsim = productCategory(product) === "esim";
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
   const reviewCount = getProductReviewCount(product);
@@ -81,13 +86,14 @@ export default function ProductDetail({ productId }) {
     if (hasSerial && !serial.trim()) { toast.error("Please enter your SIM number"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
+    if (hasEsim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error("Please enter a valid email address — the eSIM QR code is sent there"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], deliveryFor(product, { mobile: mobileNumber, address, serial }));
+        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], deliveryFor(product, { mobile: mobileNumber, address, serial, email }));
         out.transactions.forEach(addLocalTx);
         summarizeOrders(out.orders, toast);
         refetchTx();
@@ -100,8 +106,8 @@ export default function ProductDetail({ productId }) {
             amount: total,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category, delivery: hasSerial ? serial.trim() : undefined }],
-            delivery: deliveryFor(product, { mobile: mobileNumber, address, serial }),
+            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category, delivery: hasSerial ? serial.trim() : hasEsim ? email.trim() : undefined }],
+            delivery: deliveryFor(product, { mobile: mobileNumber, address, serial, email }),
           }),
         });
         const data = await res.json();
@@ -154,13 +160,13 @@ export default function ProductDetail({ productId }) {
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full capitalize">
-              <Store className="w-3 h-3" /> {product.category}
+              <Store className="w-3 h-3" /> {productCategory(product)}
             </span>
-            {product.network && <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{product.network}</span>}
+            {product.network && <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{networkLabel(product.network)}</span>}
             {!isAvailable && <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Unavailable</span>}
           </div>
 
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{product.name}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{brandText(product.name)}</h1>
 
           {/* Rating + stock */}
           <div className="flex items-center gap-3 mt-2">
@@ -180,20 +186,20 @@ export default function ProductDetail({ productId }) {
             {discount > 0 && <span className="text-sm font-bold text-green-600">{discount}% OFF</span>}
           </div>
 
-          {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{product.description}</p>}
+          {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{brandText(product.description)}</p>}
 
-          {/* JoyTel order details */}
-          {product.joytel_enabled && (
+          {/* Kabaro order details (admin only) */}
+          {canManage && product.joytel_enabled && (
             <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
               <div className="flex items-center gap-2 mb-2">
                 <Radio className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-bold text-blue-700">JoyTel Product</span>
+                <span className="text-sm font-bold text-blue-700">Kabaro Product</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {product.joytel_product_code && (
                   <div><span className="text-gray-500">Product Code:</span> <span className="font-medium text-gray-900">{product.joytel_product_code}</span></div>
                 )}
-                <div><span className="text-gray-500">Type:</span> <span className="font-medium text-gray-900">{product.joytel_type === 1 ? "Physical SIM" : "eSIM"}</span></div>
+                <div><span className="text-gray-500">Type:</span> <span className="font-medium text-gray-900">{joytelTypeName(product)}</span></div>
                 {product.joytel_warehouse && (
                   <div><span className="text-gray-500">Warehouse:</span> <span className="font-medium text-gray-900">{product.joytel_warehouse}</span></div>
                 )}
@@ -227,6 +233,16 @@ export default function ProductDetail({ productId }) {
                   <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
                 </div>
                 <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
+              </div>
+            )}
+            {hasEsim && (
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Email Address (for QR code delivery)</label>
+                  <button type="button" onClick={() => { setEmailEdited(true); setEmail(""); }} className="text-xs text-indigo-600 hover:underline">Use a different email</button>
+                </div>
+                <Input type="email" value={email} onChange={e => { setEmailEdited(true); setEmail(e.target.value); }} placeholder="you@example.com" className="mt-1" />
+                <p className="text-xs text-gray-500 mt-1">The eSIM QR code is emailed to this address after payment.</p>
               </div>
             )}
             {hasSim && (
@@ -285,12 +301,12 @@ export default function ProductDetail({ productId }) {
                       <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-                        {p.category === "sim" ? <Smartphone className="w-8 h-8 text-white" /> : <Zap className="w-8 h-8 text-white" />}
+                        {productCategory(p) === "sim" ? <Smartphone className="w-8 h-8 text-white" /> : <Zap className="w-8 h-8 text-white" />}
                       </div>
                     )}
                   </div>
                   <div className="p-3">
-                    <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
+                    <p className="font-bold text-sm text-gray-900 truncate">{brandText(p.name)}</p>
                     <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(getFinalPrice(p))}</p>
                   </div>
                 </div>

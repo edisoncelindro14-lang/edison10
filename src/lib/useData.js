@@ -122,7 +122,7 @@ export async function deleteRecord(tableName, id) {
 // ---- Products: server-side paging / search (the catalogue can hold thousands of rows) ----
 
 // Returns one page at a time plus the total match count.
-export function useProductPage({ category = "all", network = "all", query = "", activeOnly = true, page = 0, pageSize = 24 } = {}) {
+export function useProductPage({ category = "all", network = "all", query = "", activeOnly = true, page = 0, pageSize = 24, sort = "manual" } = {}) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -134,10 +134,12 @@ export function useProductPage({ category = "all", network = "all", query = "", 
     const t = setTimeout(async () => {
       try {
         const from = page * pageSize;
-        const { data, count, error } = await buildProductQuery(supabase, { category, network, query, activeOnly })
-          .order("sort_order", { ascending: true, nullsFirst: false })
-          .order("created_at", { ascending: true })
-          .range(from, from + pageSize - 1);
+        // "price" = cheapest first (shop listings); "manual" = the curated order set by drag-and-drop.
+        const ordered = buildProductQuery(supabase, { category, network, query, activeOnly });
+        const { data, count, error } = await (sort === "price"
+          ? ordered.order("price", { ascending: true }).order("name", { ascending: true })
+          : ordered.order("sort_order", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true })
+        ).range(from, from + pageSize - 1);
         if (error) throw error;
         if (cancelled) return;
         setRows(data || []);
@@ -149,7 +151,7 @@ export function useProductPage({ category = "all", network = "all", query = "", 
       if (!cancelled) setIsLoading(false);
     }, query ? 250 : 0); // debounce typing
     return () => { cancelled = true; clearTimeout(t); };
-  }, [category, network, query, activeOnly, page, pageSize, tick]);
+  }, [category, network, query, activeOnly, page, pageSize, sort, tick]);
 
   const updateLocalRecord = useCallback((id, updates) => {
     setRows(prev => prev.map(r => String(r.id) === String(id) ? { ...r, ...updates } : r));

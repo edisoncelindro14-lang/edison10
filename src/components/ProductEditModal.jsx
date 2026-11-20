@@ -37,7 +37,12 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
   const fileRef = useRef(null);
 
   function update(field, value) {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      // JoyTel recharges are load products: keep them out of SIM/eSIM.
+      if (field === "joytel_type" && Number(value) === 9) next.category = "load";
+      return next;
+    });
   }
 
   function applyCatalog(row) {
@@ -75,7 +80,7 @@ export default function ProductEditModal({ product, onClose, onSaved }) {
         name: form.name.trim(),
         price: parseFloat(form.price),
         description: form.description.trim(),
-        category: form.category,
+        category: form.joytel_enabled && Number(form.joytel_type) === 9 ? "load" : form.category,
         network: form.network,
         image_url: imageUrl,
         is_active: form.is_active,

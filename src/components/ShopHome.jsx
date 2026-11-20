@@ -6,11 +6,12 @@ import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor, isEsimProduct,
+  productCategory, joytelBadgeLabel, joytelTypeName, brandText } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
-import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
+import { sortProductsByOrder } from "../lib/productSort";
 
 function StarRating({ rating, count }) {
   return (
@@ -76,25 +77,25 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
         ) : (
           <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-            {product.category === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
+            {productCategory(product) === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
           </div>
         )}
       </div>
       <div className="p-3">
-        <span className="text-[10px] text-gray-400 uppercase font-medium">{product.category}</span>
+        <span className="text-[10px] text-gray-400 uppercase font-medium">{productCategory(product)}</span>
         <div className="flex items-center gap-1.5">
-          <p className="font-bold text-sm text-gray-900 truncate">{product.name}</p>
-          {product.joytel_enabled && (
+          <p className="font-bold text-sm text-gray-900 truncate">{brandText(product.name)}</p>
+          {canManage && product.joytel_enabled && (
             <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-              <Radio className="w-2.5 h-2.5" /> JoyTel {product.joytel_type === 1 ? "SIM" : "eSIM"}
+              <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}
             </span>
           )}
         </div>
         <div className="mt-1"><StarRating rating={rating} count={reviewCount} /></div>
-        {product.joytel_enabled && (
+        {canManage && product.joytel_enabled && (
           <div className="mt-1 space-y-0.5">
             {product.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {product.joytel_product_code}</p>}
-            <p className="text-[10px] text-gray-400">{product.joytel_type === 1 ? "Physical SIM" : "eSIM"}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
+            <p className="text-[10px] text-gray-400">{joytelTypeName(product)}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
           </div>
         )}
         <div className="flex items-center justify-between mt-2">
@@ -118,7 +119,7 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
 export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const nav = useNavigate();
   const [search, setSearch] = useState(headerSearch);
-  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("load");
   const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileNumber, setMobileNumber] = useState("");
@@ -126,6 +127,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const [address, setAddress] = useState("");
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailEdited, setEmailEdited] = useState(false);
   const [buying, setBuying] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [draggedId, setDraggedId] = useState(null);
@@ -141,15 +144,17 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
-  // Page 1 of the "All Products" grid is skipped, so browsing starts on page 2.
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [search, filterCategory, canSeeInactive]);
+  // Zero-based page index: page 0 holds the cheapest products.
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [search, filterCategory, canSeeInactive]);
   // Featured / best sellers come from the first page of the curated order;
   // the "All Products" grid is paged + searched on the server (thousands of rows).
   const { data: topProducts = [], isLoading: topLoading, updateLocalRecord: updateTopLocal, refetch: refetchTop } =
     useProductPage({ activeOnly: !canSeeInactive, pageSize: 40 });
+  // SIM products are retired: keep the category tab but never list its cards.
+  const gridCategory = filterCategory === "sim" ? "__none__" : filterCategory;
   const { data: products = [], total, isLoading: productsLoading, refetch: refetchGrid, updateLocalRecord: updateGridLocal } =
-    useProductPage({ category: filterCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE });
+    useProductPage({ category: gridCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE, sort: "price" });
   const updateLocalRecord = (id, u) => { updateTopLocal(id, u); updateGridLocal(id, u); };
   const addLocalRecord = () => { refetchTop(); refetchGrid(); };
   const refetchProducts = () => { refetchTop(); refetchGrid(); };
@@ -158,20 +163,19 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   useEffect(() => {
     if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
     if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+    if (currentMember && !emailEdited) setEmail(currentMember.email || "");
   }, [currentMember?.id]);
 
   const memberRole = currentMember?.role;
   const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
-  // Only admins/super_admins may reorder product cards via drag-and-drop.
-  const canReorder = !readOnly && (memberRole === "super_admin" || memberRole === "admin");
 
   const productCountAll = useProductCount();
-  const noFilters = !search && filterCategory === "all";
+  const noFilters = !search;
   const showFallback = !topLoading && !productsLoading && total === 0 && noFilters;
   const orderedProducts = showFallback ? sortProductsByOrder(FALLBACK_PRODUCTS) : topProducts;
-  const filtered = showFallback ? orderedProducts : products;
-  // Drag-to-reorder only makes sense when the whole list fits on one page.
-  const reorderable = canReorder && noFilters && total <= PAGE_SIZE;
+  const filtered = showFallback && filterCategory !== "sim"
+    ? orderedProducts.filter(p => p.category === filterCategory).sort((a, b) => getFinalPrice(a) - getFinalPrice(b))
+    : products;
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
 
@@ -200,36 +204,16 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     requestAnimationFrame(() => window.scrollTo(0, scrollY));
   }
 
-  function handleDragStart(e, id) { setDraggedId(id); e.dataTransfer.effectAllowed = "move"; }
-  function handleDragOver(e, id) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (id !== draggedId) setDragOverId(id); }
-  function handleDrop(e, targetId) {
-    e.preventDefault(); e.stopPropagation();
-    if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return; }
-    // Reorder within the full product list (not just the filtered view) so the
-    // saved sort_order is consistent across every device and deployment.
-    const fullOrder = orderedProducts.map(p => p.id);
-    const fromIdx = fullOrder.indexOf(draggedId);
-    const toIdx = fullOrder.indexOf(targetId);
-    if (fromIdx === -1 || toIdx === -1) { setDraggedId(null); setDragOverId(null); return; }
-    const newOrder = [...fullOrder]; newOrder.splice(fromIdx, 1); newOrder.splice(toIdx, 0, draggedId);
-    // Optimistically reflect the new order locally, then persist to the server.
-    newOrder.forEach((id, i) => updateLocalRecord(id, { sort_order: i }));
-    setDraggedId(null); setDragOverId(null); setSortVersion(v => v + 1);
-    persistProductOrder(newOrder).catch(err => {
-      console.error("Failed to persist product order:", err);
-      toast.error("Could not save product order — showing the last saved layout.");
-      refetchProducts();
-    });
-  }
-
   async function handleCheckout(paymentMethod) {
     if (!currentMember) { nav("/MemberLogin"); return; }
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
     const hasMobile = cart.some(needsMobile);
+    const hasEsim = cart.some(isEsimProduct);
     if (cart.some(isJoytelRecharge) && !serial.trim()) { toast.error("Please enter your SIM number"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for your order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
+    if (hasEsim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error("Please enter a valid email address — the eSIM QR code is sent there"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
@@ -239,7 +223,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
           currentMember.id,
           cart.map(i => ({
             product_id: i.id, qty: i.qty,
-            delivery: deliveryFor(i, { mobile: mobileNumber, address, serial }),
+            delivery: deliveryFor(i, { mobile: mobileNumber, address, serial, email }),
           })),
         );
         out.transactions.forEach(addLocalTx);
@@ -255,7 +239,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             member_id: currentMember.id,
             purpose: "purchase",
             items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category, delivery: isJoytelRecharge(i) ? serial.trim() : undefined })),
-            delivery: hasMobile ? mobileNumber : (cart.every(isJoytelEsim) ? "" : address),
+            delivery: hasMobile ? mobileNumber : (cart.every(isEsimProduct) ? email.trim() : address),
           }),
         });
         const data = await res.json();
@@ -267,7 +251,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { canManage, canReorder: reorderable, onEdit: setEditProduct, onAddToCart: addToCart, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: () => { setDraggedId(null); setDragOverId(null); }, draggedId, dragOverId };
+  const cardProps = { canManage, onEdit: setEditProduct, onAddToCart: addToCart };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -366,14 +350,13 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
       {/* All Products */}
       <section id="all-products" className="mb-10 scroll-mt-20">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">All Products <span className="text-gray-400 text-base font-normal">({showFallback ? filtered.length : Math.max(0, total - PAGE_SIZE)} items)</span></h2>
+          <h2 className="text-2xl font-bold text-gray-900">All Products <span className="text-gray-400 text-base font-normal">({showFallback ? filtered.length : total} items)</span></h2>
           {canManage && <Button onClick={() => setEditProduct({})} className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="w-4 h-4" /> Add Product</Button>}
         </div>
 
         {/* Category tabs + search */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setFilterCategory("all")} className={`px-4 py-2 rounded-xl text-sm font-medium transition ${filterCategory === "all" ? "bg-indigo-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>All</button>
             {SHOP_CATEGORIES.map(cat => (
               <button key={cat.id} onClick={() => setFilterCategory(cat.id)} className={`px-4 py-2 rounded-xl text-sm font-medium transition ${filterCategory === cat.id ? "bg-indigo-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{cat.label}</button>
             ))}
@@ -387,10 +370,10 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
         </div>
-        {total > PAGE_SIZE * 2 && (
+        {total > PAGE_SIZE && (
           <div className="flex items-center justify-center gap-3 mt-8">
-            <Button variant="outline" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
-            <span className="text-sm text-gray-500">Page {page} of {Math.ceil(Math.max(0, total - PAGE_SIZE) / PAGE_SIZE)}</span>
+            <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+            <span className="text-sm text-gray-500">Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}</span>
             <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
           </div>
         )}
@@ -449,6 +432,16 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
                         <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
                       </div>
                       <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
+                    </div>
+                  )}
+                  {cart.some(isEsimProduct) && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Email Address (for eSIM QR code)</label>
+                        <button type="button" onClick={() => { setEmailEdited(true); setEmail(""); }} className="text-xs text-indigo-600 hover:underline">Use a different email</button>
+                      </div>
+                      <Input type="email" value={email} onChange={e => { setEmailEdited(true); setEmail(e.target.value); }} placeholder="you@example.com" className="mt-1" />
+                      <p className="text-xs text-gray-500 mt-1">The eSIM QR code is emailed to this address after payment.</p>
                     </div>
                   )}
                   {cart.some(i => i.category === "sim") && (
