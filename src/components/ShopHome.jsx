@@ -189,7 +189,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             </div>
             <Link to="/Wallet"><Button size="sm" variant="outline" className="ml-2 border-emerald-300 text-emerald-700">Top Up</Button></Link>
           </div>
-          <button onClick={() => setCheckoutOpen(true)} className="relative flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition-all">
+          <button onClick={() => setCheckoutOpen(true)} className="relative flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition-all">
             <ShoppingCart className="w-5 h-5" /> Cart
             {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
           </button>
@@ -357,7 +357,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
                     {currentMember && walletBalance < cartTotal && <span className="text-sm text-red-600">Insufficient balance</span>}
                   </div>
                   {!currentMember ? (
-                    <Button onClick={() => handleCheckout()} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white h-12 rounded-xl font-bold">
+                    <Button onClick={() => handleCheckout()} className="w-full !bg-emerald-600 hover:!bg-emerald-700 text-white h-12 rounded-xl font-bold">
                       <Check className="w-5 h-5 mr-2" /> Login to Checkout
                     </Button>
                   ) : (

@@ -180,7 +180,7 @@ export default function ProductCard({
               onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
               className={`flex flex-shrink-0 items-center justify-center rounded-full shadow-md transition-all duration-200
                 ${compact ? "h-8 w-8" : "h-10 w-10"}
-                ${isAvailable ? "bg-gray-900 text-white hover:scale-105 hover:bg-orange-500" : "cursor-not-allowed bg-gray-200 text-gray-400"}`}
+                ${isAvailable ? "bg-emerald-600 text-white hover:scale-105 hover:bg-emerald-700" : "cursor-not-allowed bg-gray-200 text-gray-400"}`}
             >
               <ShoppingCart className={compact ? "w-4 h-4" : "w-5 h-5"} />
             </button>

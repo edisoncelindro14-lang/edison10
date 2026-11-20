@@ -44,7 +44,7 @@ export default function PublicShop({ children }) {
             <button
               onClick={openCart}
               aria-label="Cart"
-              className="relative flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 sm:px-4 py-2 rounded-xl text-sm shadow-sm transition-colors"
+              className="relative flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 sm:px-4 py-2 rounded-xl text-sm shadow-sm transition-colors"
             >
               <ShoppingCart className="w-4 h-4" /> <span className="hidden sm:inline">Cart</span>
               {cart.length > 0 && (
