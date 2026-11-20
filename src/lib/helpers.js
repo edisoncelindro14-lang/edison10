@@ -151,9 +151,11 @@ export const isJoytelRecharge = p => !!(p && p.joytel_enabled && Number(p.joytel
 export const isJoytelEsim = p => !!(p && p.joytel_enabled && !isJoytelRecharge(p) && Number(p.joytel_type || 3) === 3);
 /** Does the customer have to type a mobile number? (e-load, or a JoyTel product that is neither an eSIM nor a recharge) */
 export const needsMobile = p => !!p && !isJoytelRecharge(p) && (p.category === "load" || (p.joytel_enabled && !isJoytelEsim(p)));
+/** eSIM products are delivered by email: the QR code is sent there after payment. */
+export const isEsimProduct = p => productCategory(p) === "esim";
 /** What the delivery field carries for one cart line. */
-export const deliveryFor = (p, { mobile = "", address = "", serial = "" } = {}) =>
-  isJoytelRecharge(p) ? serial.trim() : needsMobile(p) ? mobile : isJoytelEsim(p) ? "" : address;
+export const deliveryFor = (p, { mobile = "", address = "", serial = "", email = "" } = {}) =>
+  isJoytelRecharge(p) ? serial.trim() : needsMobile(p) ? mobile : isEsimProduct(p) ? email.trim() : address;
 /** Shop category for a product: JoyTel recharges are load products, never SIM/eSIM. */
 export const productCategory = p => (isJoytelRecharge(p) ? "load" : p?.category || "");
 /** Short JoyTel type label for product cards (SIM, eSIM or Load). */

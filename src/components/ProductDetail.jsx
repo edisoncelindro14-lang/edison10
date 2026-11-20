@@ -18,6 +18,8 @@ export default function ProductDetail({ productId }) {
   const [qty, setQty] = useState(1);
   const [mobileNumber, setMobileNumber] = useState("");
   const [serial, setSerial] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailEdited, setEmailEdited] = useState(false);
   const [address, setAddress] = useState("");
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
@@ -34,6 +36,7 @@ export default function ProductDetail({ productId }) {
   useEffect(() => {
     if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
     if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+    if (currentMember && !emailEdited) setEmail(currentMember.email || "");
   }, [currentMember?.id]);
 
   const memberRole = currentMember?.role;
@@ -65,6 +68,7 @@ export default function ProductDetail({ productId }) {
   const hasSim = productCategory(product) === "sim";
   const hasMobile = needsMobile(product);
   const hasSerial = isJoytelRecharge(product);
+  const hasEsim = productCategory(product) === "esim";
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
   const reviewCount = getProductReviewCount(product);
@@ -82,13 +86,14 @@ export default function ProductDetail({ productId }) {
     if (hasSerial && !serial.trim()) { toast.error("Please enter your SIM number"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for load delivery"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
+    if (hasEsim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error("Please enter a valid email address — the eSIM QR code is sent there"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < total) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
     try {
       const details = hasLoad ? `${product.name} x${qty} → ${mobileNumber}` : `${product.name} x${qty} → ${address}`;
       if (isWallet) {
-        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], deliveryFor(product, { mobile: mobileNumber, address, serial }));
+        const out = await payFromWallet(currentMember.id, [{ product_id: product.id, qty }], deliveryFor(product, { mobile: mobileNumber, address, serial, email }));
         out.transactions.forEach(addLocalTx);
         summarizeOrders(out.orders, toast);
         refetchTx();
@@ -101,8 +106,8 @@ export default function ProductDetail({ productId }) {
             amount: total,
             member_id: currentMember.id,
             purpose: "purchase",
-            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category, delivery: hasSerial ? serial.trim() : undefined }],
-            delivery: deliveryFor(product, { mobile: mobileNumber, address, serial }),
+            items: [{ product_id: product.id, name: product.name, price: finalPrice, qty, category: product.category, delivery: hasSerial ? serial.trim() : hasEsim ? email.trim() : undefined }],
+            delivery: deliveryFor(product, { mobile: mobileNumber, address, serial, email }),
           }),
         });
         const data = await res.json();
@@ -228,6 +233,16 @@ export default function ProductDetail({ productId }) {
                   <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
                 </div>
                 <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
+              </div>
+            )}
+            {hasEsim && (
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Email Address (for QR code delivery)</label>
+                  <button type="button" onClick={() => { setEmailEdited(true); setEmail(""); }} className="text-xs text-indigo-600 hover:underline">Use a different email</button>
+                </div>
+                <Input type="email" value={email} onChange={e => { setEmailEdited(true); setEmail(e.target.value); }} placeholder="you@example.com" className="mt-1" />
+                <p className="text-xs text-gray-500 mt-1">The eSIM QR code is emailed to this address after payment.</p>
               </div>
             )}
             {hasSim && (

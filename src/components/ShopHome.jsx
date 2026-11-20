@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor, isEsimProduct,
   productCategory, joytelBadgeLabel, joytelTypeName, brandText } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
@@ -127,6 +127,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const [address, setAddress] = useState("");
   const [addressEdited, setAddressEdited] = useState(false);
   const [mobileEdited, setMobileEdited] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailEdited, setEmailEdited] = useState(false);
   const [buying, setBuying] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [draggedId, setDraggedId] = useState(null);
@@ -159,6 +161,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   useEffect(() => {
     if (currentMember && !mobileEdited) setMobileNumber(currentMember.phone || "");
     if (currentMember && !addressEdited) setAddress(currentMember.address || "");
+    if (currentMember && !emailEdited) setEmail(currentMember.email || "");
   }, [currentMember?.id]);
 
   const memberRole = currentMember?.role;
@@ -228,9 +231,11 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     const hasLoad = cart.some(i => i.category === "load");
     const hasSim = cart.some(i => i.category === "sim");
     const hasMobile = cart.some(needsMobile);
+    const hasEsim = cart.some(isEsimProduct);
     if (cart.some(isJoytelRecharge) && !serial.trim()) { toast.error("Please enter your SIM number"); return; }
     if (hasMobile && !mobileNumber.trim()) { toast.error("Please enter a mobile number for your order"); return; }
     if (hasSim && !address.trim()) { toast.error("Please enter a delivery address for SIM cards"); return; }
+    if (hasEsim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { toast.error("Please enter a valid email address — the eSIM QR code is sent there"); return; }
     const isWallet = paymentMethod === "wallet";
     if (isWallet && walletBalance < cartTotal) { toast.error("Insufficient wallet balance. Please top up first."); return; }
     setBuying(true);
@@ -240,7 +245,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
           currentMember.id,
           cart.map(i => ({
             product_id: i.id, qty: i.qty,
-            delivery: deliveryFor(i, { mobile: mobileNumber, address, serial }),
+            delivery: deliveryFor(i, { mobile: mobileNumber, address, serial, email }),
           })),
         );
         out.transactions.forEach(addLocalTx);
@@ -256,7 +261,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             member_id: currentMember.id,
             purpose: "purchase",
             items: cart.map(i => ({ product_id: i.id, name: i.name, price: i.price, qty: i.qty, category: i.category, delivery: isJoytelRecharge(i) ? serial.trim() : undefined })),
-            delivery: hasMobile ? mobileNumber : (cart.every(isJoytelEsim) ? "" : address),
+            delivery: hasMobile ? mobileNumber : (cart.every(isEsimProduct) ? email.trim() : address),
           }),
         });
         const data = await res.json();
@@ -450,6 +455,16 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
                         <button type="button" onClick={() => { setMobileEdited(true); setMobileNumber(""); }} className="text-xs text-indigo-600 hover:underline">Use a different number</button>
                       </div>
                       <Input value={mobileNumber} onChange={e => { setMobileEdited(true); setMobileNumber(e.target.value); }} placeholder="09XX XXX XXXX" className="mt-1" />
+                    </div>
+                  )}
+                  {cart.some(isEsimProduct) && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Email Address (for eSIM QR code)</label>
+                        <button type="button" onClick={() => { setEmailEdited(true); setEmail(""); }} className="text-xs text-indigo-600 hover:underline">Use a different email</button>
+                      </div>
+                      <Input type="email" value={email} onChange={e => { setEmailEdited(true); setEmail(e.target.value); }} placeholder="you@example.com" className="mt-1" />
+                      <p className="text-xs text-gray-500 mt-1">The eSIM QR code is emailed to this address after payment.</p>
                     </div>
                   )}
                   {cart.some(i => i.category === "sim") && (
