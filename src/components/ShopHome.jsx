@@ -7,7 +7,7 @@ import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
-  productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
+  productCategory, joytelBadgeLabel, joytelTypeName, brandText } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -84,7 +84,7 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
       <div className="p-3">
         <span className="text-[10px] text-gray-400 uppercase font-medium">{productCategory(product)}</span>
         <div className="flex items-center gap-1.5">
-          <p className="font-bold text-sm text-gray-900 truncate">{product.name}</p>
+          <p className="font-bold text-sm text-gray-900 truncate">{brandText(product.name)}</p>
           {canManage && product.joytel_enabled && (
             <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
               <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}

@@ -7,7 +7,7 @@ import { useTable, useCurrentMember, useProduct, useProductPage } from "../lib/u
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
-  productCategory, joytelBadgeLabel, joytelTypeName, networkLabel } from "../lib/helpers";
+  productCategory, joytelBadgeLabel, joytelTypeName, networkLabel, brandText } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -161,7 +161,7 @@ export default function ProductDetail({ productId }) {
             {!isAvailable && <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Unavailable</span>}
           </div>
 
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{product.name}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{brandText(product.name)}</h1>
 
           {/* Rating + stock */}
           <div className="flex items-center gap-3 mt-2">
@@ -181,7 +181,7 @@ export default function ProductDetail({ productId }) {
             {discount > 0 && <span className="text-sm font-bold text-green-600">{discount}% OFF</span>}
           </div>
 
-          {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{product.description}</p>}
+          {product.description && <p className="text-gray-600 mt-4 leading-relaxed">{brandText(product.description)}</p>}
 
           {/* Kabaro order details (admin only) */}
           {canManage && product.joytel_enabled && (
@@ -291,7 +291,7 @@ export default function ProductDetail({ productId }) {
                     )}
                   </div>
                   <div className="p-3">
-                    <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
+                    <p className="font-bold text-sm text-gray-900 truncate">{brandText(p.name)}</p>
                     <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(getFinalPrice(p))}</p>
                   </div>
                 </div>
