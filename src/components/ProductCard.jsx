@@ -20,8 +20,8 @@ function StarRating({ rating, count }) {
 }
 
 /**
- * Shared product card used by the shop grids and the related-products strip.
- * `compact` renders the smaller related-products version (name + price only).
+ * Shared horizontal (rectangle) product card used by the shop grids and the
+ * related-products strip. `compact` renders the smaller related-products version.
  */
 export default function ProductCard({
   product,
@@ -62,8 +62,8 @@ export default function ProductCard({
       onDrop={canReorder ? (e) => onDrop(e, product.id) : undefined}
       onDragEnd={canReorder ? onDragEnd : undefined}
       onClick={() => nav(`/Products/${product.id}`)}
-      className={`group relative flex h-full flex-col overflow-hidden rounded-[1.35rem] border bg-white transition-all duration-300
-        ${compact ? "shadow-sm" : "shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:-translate-y-1 hover:shadow-xl"}
+      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300
+        ${compact ? "shadow-sm" : "shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:-translate-y-0.5 hover:shadow-lg"}
         ${dragOverId === product.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-200 hover:border-gray-300"}
         ${draggedId === product.id ? "opacity-40" : ""}
         ${canReorder ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
@@ -81,73 +81,82 @@ export default function ProductCard({
         </div>
       )}
 
-      {/* Media */}
-      <div className={`relative overflow-hidden ${compact ? "h-24" : "h-28 sm:h-32"}`}>
-        {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        ) : (
-          <div className={`relative h-full bg-gradient-to-br ${NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600"}`}>
-            <div className="absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/20 blur-xl" />
-            <div className="absolute -bottom-10 -left-8 h-24 w-24 rounded-full bg-black/15 blur-xl" />
-            <div className="relative flex h-full items-center justify-center">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/30 bg-white/20 shadow-inner backdrop-blur-sm">
+      <div className={`flex flex-1 items-stretch gap-3 ${compact ? "p-2.5" : "p-3 sm:p-3.5"}`}>
+        {/* Thumbnail */}
+        <div className={`relative shrink-0 overflow-hidden rounded-xl ${compact ? "h-12 w-12" : "h-16 w-16 sm:h-20 sm:w-20"}`}>
+          {product.image_url ? (
+            <img src={product.image_url} alt={product.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          ) : (
+            <div className={`relative h-full w-full bg-gradient-to-br ${NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600"}`}>
+              <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20 blur-lg" />
+              <div className="relative flex h-full items-center justify-center">
                 <MediaIcon className="w-5 h-5 text-white" />
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {discount > 0 && !compact && (
-          <span className="absolute left-2 top-2 z-20 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">-{discount}%</span>
-        )}
-
-        {canManage && (
-          <>
-            {canReorder && (
-              <div className="absolute right-11 top-2 z-20 rounded-full bg-white/90 p-2 shadow-sm opacity-0 transition group-hover:opacity-100 cursor-grab">
-                <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-              </div>
-            )}
-            <button
-              aria-label="Edit product"
-              onClick={(e) => { e.stopPropagation(); onEdit(product); }}
-              className="absolute right-2 top-2 z-20 rounded-full bg-white/90 p-2 shadow-sm opacity-0 transition group-hover:opacity-100 hover:bg-white"
-            >
-              <Pencil className="w-3.5 h-3.5 text-gray-600" />
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Details */}
-      <div className={`flex flex-1 flex-col ${compact ? "p-3" : "p-3.5 sm:p-4"}`}>
-        <div className="flex items-start justify-between gap-2">
-          <p className={`truncate font-bold text-gray-900 ${compact ? "text-sm" : "text-sm sm:text-[15px]"}`}>{brandText(product.name)}</p>
-          {showJoytelBadge && product.joytel_enabled && (
-            <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700 ring-1 ring-blue-100">
-              <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}
-            </span>
+          {canManage && (
+            <div className="absolute right-0.5 top-0.5 z-20 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+              {canReorder && (
+                <div className="rounded-md bg-white/90 p-1 shadow-sm cursor-grab">
+                  <GripVertical className="w-3 h-3 text-gray-500" />
+                </div>
+              )}
+              <button
+                aria-label="Edit product"
+                onClick={(e) => { e.stopPropagation(); onEdit(product); }}
+                className="rounded-md bg-white/90 p-1 shadow-sm hover:bg-white"
+              >
+                <Pencil className="w-3 h-3 text-gray-600" />
+              </button>
+            </div>
           )}
         </div>
 
-        {showDescription && (
-          <p className="mt-1 line-clamp-2 text-xs text-gray-500">{product.description || product.network}</p>
-        )}
-
-        {showRating && !compact && (
-          <div className="mt-1.5"><StarRating rating={getProductRating(product)} count={getProductReviewCount(product)} /></div>
-        )}
-
-        {showJoytelDetails && product.joytel_enabled && (
-          <div className="mt-1.5 space-y-0.5">
-            {product.joytel_product_code && <p className="text-[10px] font-medium text-blue-600">Code: {product.joytel_product_code}</p>}
-            <p className="text-[10px] text-gray-400">{joytelTypeName(product)}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
+        {/* Details */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center gap-1.5">
+            <p className={`truncate font-bold text-gray-900 ${compact ? "text-sm" : "text-sm sm:text-[15px]"}`}>{brandText(product.name)}</p>
+            {showJoytelBadge && product.joytel_enabled && (
+              <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700 ring-1 ring-blue-100">
+                <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}
+              </span>
+            )}
           </div>
-        )}
 
-        <div className={`mt-auto flex items-end justify-between gap-2 ${compact ? "pt-2" : "border-t border-dashed border-gray-100 pt-3"}`}>
-          <div className="min-w-0">
-            <p className={`font-extrabold tracking-tight text-gray-900 ${compact ? "text-base" : "text-lg sm:text-xl"}`}>{money(finalPrice)}</p>
+          {showDescription && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{product.description || product.network}</p>
+          )}
+
+          {showRating && !compact && (
+            <div className="mt-1"><StarRating rating={getProductRating(product)} count={getProductReviewCount(product)} /></div>
+          )}
+
+          {showJoytelDetails && product.joytel_enabled && (
+            <div className="mt-1 space-y-0.5">
+              {product.joytel_product_code && <p className="text-[10px] font-medium text-blue-600">Code: {product.joytel_product_code}</p>}
+              <p className="text-[10px] text-gray-400">{joytelTypeName(product)}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
+            </div>
+          )}
+
+          {!compact && (category || discount > 0) && (
+            <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+              {category && (
+                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-100">
+                  <span>{category.icon}</span> {category.label}
+                </span>
+              )}
+              {discount > 0 && (
+                <span className="inline-flex w-fit items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 ring-1 ring-red-100">-{discount}%</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Price + action */}
+        <div className="flex shrink-0 flex-col items-end justify-between gap-2">
+          <div className="text-right">
+            <p className={`font-extrabold tracking-tight text-gray-900 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>{money(finalPrice)}</p>
             {!compact && (product.discount_percent > 0 ? (
               <span className="text-[11px] text-gray-400 line-through">{money(product.price)}</span>
             ) : product.load_amount ? (
@@ -160,19 +169,13 @@ export default function ProductCard({
               disabled={!isAvailable}
               onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
               className={`flex flex-shrink-0 items-center justify-center rounded-full shadow-md transition-all duration-200
-                ${compact ? "h-8 w-8" : "h-10 w-10"}
+                ${compact ? "h-7 w-7" : "h-9 w-9"}
                 ${isAvailable ? "bg-gray-900 text-white hover:scale-105 hover:bg-orange-500" : "cursor-not-allowed bg-gray-200 text-gray-400"}`}
             >
-              <ShoppingCart className={compact ? "w-4 h-4" : "w-5 h-5"} />
+              <ShoppingCart className={compact ? "w-3.5 h-3.5" : "w-4 h-4"} />
             </button>
           )}
         </div>
-
-        {!compact && category && (
-          <span className="mt-3 inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-100">
-            <span>{category.icon}</span> {category.label}
-          </span>
-        )}
       </div>
     </motion.div>
   );
