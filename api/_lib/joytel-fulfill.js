@@ -44,6 +44,13 @@ export const isJoytelEsim = p => Number(p?.joytel_type || 3) === 3;
 /** JoyTel still requires a phone field. Used only when an eSIM customer has no number on file. */
 export const FALLBACK_PHONE = '09000000000';
 
+/** Email to send to JoyTel for an eSIM: the one typed at checkout, else the member's profile email. */
+export function pickEmail(delivery, member, product) {
+  const d = String(delivery || "").trim();
+  if (isJoytelEsim(product) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d)) return d;
+  return String(member?.email || "").trim();
+}
+
 /** Phone to send to JoyTel: a number typed at checkout, else the member's profile phone, else (eSIM only) a placeholder. */
 export function pickPhone(delivery, member, product) {
   const d = String(delivery || '').trim();
@@ -72,7 +79,7 @@ export function joytelPreflight(product, member, delivery, qty = 1) {
     if (!isDailyPlan(product) && qty > 1) return 'This plan can only be bought one at a time.';
     return null;
   }
-  if (!member?.email) return 'Please add your email address to your profile first. JoyTel sends your eSIM to it.';
+  if (!pickEmail(delivery, member, product)) return 'Please add your email address to your profile first. JoyTel sends your eSIM to it.';
   if (!pickPhone(delivery, member, product)) return 'Please enter a mobile number for this order.';
   return null;
 }
@@ -128,7 +135,7 @@ export async function placeJoytelFulfilment({ product, qty, member, delivery, or
         type: product.joytel_type || 3,
         receiveName: member.full_name || member.username || 'Customer',
         phone: pickPhone(delivery, member, product),
-        email: member.email,
+        email: pickEmail(delivery, member, product),
         orderTid,
         replyType: 1,
         itemList: [{ productCode: product.joytel_product_code, quantity: qty }],
