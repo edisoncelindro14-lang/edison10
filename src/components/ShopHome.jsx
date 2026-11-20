@@ -6,7 +6,8 @@ import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+  productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -76,17 +77,17 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
         ) : (
           <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-            {product.category === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
+            {productCategory(product) === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
           </div>
         )}
       </div>
       <div className="p-3">
-        <span className="text-[10px] text-gray-400 uppercase font-medium">{product.category}</span>
+        <span className="text-[10px] text-gray-400 uppercase font-medium">{productCategory(product)}</span>
         <div className="flex items-center gap-1.5">
           <p className="font-bold text-sm text-gray-900 truncate">{product.name}</p>
           {product.joytel_enabled && (
             <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-              <Radio className="w-2.5 h-2.5" /> JoyTel {product.joytel_type === 1 ? "SIM" : "eSIM"}
+              <Radio className="w-2.5 h-2.5" /> JoyTel {joytelBadgeLabel(product)}
             </span>
           )}
         </div>
@@ -94,7 +95,7 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
         {product.joytel_enabled && (
           <div className="mt-1 space-y-0.5">
             {product.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {product.joytel_product_code}</p>}
-            <p className="text-[10px] text-gray-400">{product.joytel_type === 1 ? "Physical SIM" : "eSIM"}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
+            <p className="text-[10px] text-gray-400">{joytelTypeName(product)}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
           </div>
         )}
         <div className="flex items-center justify-between mt-2">

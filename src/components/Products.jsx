@@ -5,7 +5,8 @@ import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, 
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+  productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -264,7 +265,7 @@ export default function Products() {
                   <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-                    {p.category === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
+                    {productCategory(p) === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
                   </div>
                 )}
               </div>
@@ -273,7 +274,7 @@ export default function Products() {
                   <p className="font-bold text-sm text-gray-900">{p.name}</p>
                   {p.joytel_enabled && (
                     <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                      <Radio className="w-2.5 h-2.5" /> JoyTel {p.joytel_type === 1 ? "SIM" : "eSIM"}
+                      <Radio className="w-2.5 h-2.5" /> JoyTel {joytelBadgeLabel(p)}
                     </span>
                   )}
                 </div>
@@ -281,7 +282,7 @@ export default function Products() {
                 {p.joytel_enabled && (
                   <div className="mt-1.5 space-y-0.5">
                     {p.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {p.joytel_product_code}</p>}
-                    <p className="text-[10px] text-gray-400">{p.joytel_type === 1 ? "Physical SIM" : "eSIM"}{p.joytel_warehouse ? ` · ${p.joytel_warehouse}` : ""}</p>
+                    <p className="text-[10px] text-gray-400">{joytelTypeName(p)}{p.joytel_warehouse ? ` · ${p.joytel_warehouse}` : ""}</p>
                   </div>
                 )}
                 <div className="flex items-center justify-between mt-3">

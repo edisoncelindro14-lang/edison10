@@ -154,3 +154,9 @@ export const needsMobile = p => !!p && !isJoytelRecharge(p) && (p.category === "
 /** What the delivery field carries for one cart line. */
 export const deliveryFor = (p, { mobile = "", address = "", serial = "" } = {}) =>
   isJoytelRecharge(p) ? serial.trim() : needsMobile(p) ? mobile : isJoytelEsim(p) ? "" : address;
+/** Shop category for a product: JoyTel recharges are load products, never SIM/eSIM. */
+export const productCategory = p => (isJoytelRecharge(p) ? "load" : p?.category || "");
+/** Short JoyTel type label for product cards (SIM, eSIM or Load). */
+export const joytelBadgeLabel = p => (isJoytelRecharge(p) ? "Load" : Number(p?.joytel_type) === 1 ? "SIM" : "eSIM");
+/** Long JoyTel type name for product details (Physical SIM, eSIM or Load). */
+export const joytelTypeName = p => (isJoytelRecharge(p) ? "Load" : Number(p?.joytel_type) === 1 ? "Physical SIM" : "eSIM");

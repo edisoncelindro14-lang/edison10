@@ -6,7 +6,8 @@ import toast from "react-hot-toast";
 import { useTable, useCurrentMember, useProduct, useProductPage } from "../lib/useData";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+  productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
 
@@ -60,8 +61,8 @@ export default function ProductDetail({ productId }) {
 
   const finalPrice = getFinalPrice(product);
   const total = finalPrice * qty;
-  const hasLoad = product.category === "load";
-  const hasSim = product.category === "sim";
+  const hasLoad = productCategory(product) === "load";
+  const hasSim = productCategory(product) === "sim";
   const hasMobile = needsMobile(product);
   const hasSerial = isJoytelRecharge(product);
   const isAvailable = product.is_active !== false;
@@ -154,7 +155,7 @@ export default function ProductDetail({ productId }) {
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs font-semibold px-2.5 py-1 rounded-full capitalize">
-              <Store className="w-3 h-3" /> {product.category}
+              <Store className="w-3 h-3" /> {productCategory(product)}
             </span>
             {product.network && <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-1 rounded-full">{product.network}</span>}
             {!isAvailable && <span className="bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full">Unavailable</span>}
@@ -193,7 +194,7 @@ export default function ProductDetail({ productId }) {
                 {product.joytel_product_code && (
                   <div><span className="text-gray-500">Product Code:</span> <span className="font-medium text-gray-900">{product.joytel_product_code}</span></div>
                 )}
-                <div><span className="text-gray-500">Type:</span> <span className="font-medium text-gray-900">{product.joytel_type === 1 ? "Physical SIM" : "eSIM"}</span></div>
+                <div><span className="text-gray-500">Type:</span> <span className="font-medium text-gray-900">{joytelTypeName(product)}</span></div>
                 {product.joytel_warehouse && (
                   <div><span className="text-gray-500">Warehouse:</span> <span className="font-medium text-gray-900">{product.joytel_warehouse}</span></div>
                 )}
@@ -285,7 +286,7 @@ export default function ProductDetail({ productId }) {
                       <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-                        {p.category === "sim" ? <Smartphone className="w-8 h-8 text-white" /> : <Zap className="w-8 h-8 text-white" />}
+                        {productCategory(p) === "sim" ? <Smartphone className="w-8 h-8 text-white" /> : <Zap className="w-8 h-8 text-white" />}
                       </div>
                     )}
                   </div>
