@@ -11,6 +11,7 @@ const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(loadCart);
+  const [cartOpen, setCartOpen] = useState(false);
 
   useEffect(() => {
     try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch {}
@@ -40,7 +41,7 @@ export function CartProvider({ children }) {
   }
 
   return (
-    <CartContext.Provider value={{ cart, setCart, addToCart, removeFromCart, updateQty, clearCart }}>
+    <CartContext.Provider value={{ cart, setCart, addToCart, removeFromCart, updateQty, clearCart, cartOpen, setCartOpen }}>
       {children}
     </CartContext.Provider>
   );

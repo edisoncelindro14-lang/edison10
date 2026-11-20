@@ -19,8 +19,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const nav = useNavigate();
   const [search, setSearch] = useState(headerSearch);
   const [filterCategory, setFilterCategory] = useState("load");
-  const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart } = useCart();
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart, cartOpen: checkoutOpen, setCartOpen: setCheckoutOpen } = useCart();
   const [mobileNumber, setMobileNumber] = useState("");
   const [serial, setSerial] = useState("");
   const [address, setAddress] = useState("");
@@ -196,16 +195,6 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
           </button>
         </div>
       )}
-      {/* Cart button for guests */}
-      {!currentMember && cart.length > 0 && (
-        <div className="flex justify-end mb-6">
-          <button onClick={() => setCheckoutOpen(true)} className="relative flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-3 rounded-2xl shadow-lg transition-all">
-            <ShoppingCart className="w-5 h-5" /> Cart
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">{cart.length}</span>
-          </button>
-        </div>
-      )}
-
       {/* Search bar above product gallery */}
       <div className="mb-6">
         <div className="relative max-w-2xl mx-auto">

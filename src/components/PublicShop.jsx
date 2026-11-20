@@ -1,15 +1,23 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Search, ShoppingCart, User } from "lucide-react";
 import ShopHome from "./ShopHome";
 import Products from "./Products";
 import { getSessionMemberId } from "../lib/auth";
+import { useCart } from "../lib/CartContext";
 
 const LOGO_URL = "https://media.base44.com/images/public/6a9f6514819dc31adf1bfd4a/a5039a1c6_Firefly_removedotsthelogomustbethesamefromoriginal67432.png";
 
 export default function PublicShop({ children }) {
   const [search, setSearch] = useState("");
   const isLoggedIn = !!getSessionMemberId();
+  const nav = useNavigate();
+  const { cart, setCartOpen } = useCart();
+
+  function openCart() {
+    if (children) nav("/");
+    setCartOpen(true);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -33,6 +41,16 @@ export default function PublicShop({ children }) {
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={openCart}
+              aria-label="Cart"
+              className="relative flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 sm:px-4 py-2 rounded-xl text-sm shadow-sm transition-colors"
+            >
+              <ShoppingCart className="w-4 h-4" /> <span className="hidden sm:inline">Cart</span>
+              {cart.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>
+              )}
+            </button>
             {isLoggedIn ? (
               <Link to="/Dashboard" className="flex items-center gap-1.5 text-gray-700 hover:text-indigo-600 font-medium text-sm">
                 <User className="w-4 h-4" /> Account
