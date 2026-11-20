@@ -119,7 +119,7 @@ function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDr
 export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const nav = useNavigate();
   const [search, setSearch] = useState(headerSearch);
-  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("load");
   const { cart, addToCart: cartAddToCart, removeFromCart, updateQty, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileNumber, setMobileNumber] = useState("");
@@ -144,6 +144,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
+  // Only admins/super_admins keep the curated (drag-and-drop) order; everyone else sees cheapest first.
+  const canReorder = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin");
   // Page 1 of the "All Products" grid is skipped, so browsing starts on page 2.
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [search, filterCategory, canSeeInactive]);
@@ -152,7 +154,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { data: topProducts = [], isLoading: topLoading, updateLocalRecord: updateTopLocal, refetch: refetchTop } =
     useProductPage({ activeOnly: !canSeeInactive, pageSize: 40 });
   const { data: products = [], total, isLoading: productsLoading, refetch: refetchGrid, updateLocalRecord: updateGridLocal } =
-    useProductPage({ category: filterCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE });
+    useProductPage({ category: filterCategory, query: search, activeOnly: !canSeeInactive, page, pageSize: PAGE_SIZE, sort: canReorder ? "manual" : "price" });
   const updateLocalRecord = (id, u) => { updateTopLocal(id, u); updateGridLocal(id, u); };
   const addLocalRecord = () => { refetchTop(); refetchGrid(); };
   const refetchProducts = () => { refetchTop(); refetchGrid(); };
@@ -166,14 +168,14 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const memberRole = currentMember?.role;
   const canManage = !readOnly && (memberRole === "super_admin" || memberRole === "admin" || memberRole === "reseller" || currentMember?.username === "dok");
-  // Only admins/super_admins may reorder product cards via drag-and-drop.
-  const canReorder = !readOnly && (memberRole === "super_admin" || memberRole === "admin");
 
   const productCountAll = useProductCount();
-  const noFilters = !search && filterCategory === "all";
+  const noFilters = !search;
   const showFallback = !topLoading && !productsLoading && total === 0 && noFilters;
   const orderedProducts = showFallback ? sortProductsByOrder(FALLBACK_PRODUCTS) : topProducts;
-  const filtered = showFallback ? orderedProducts : products;
+  const filtered = showFallback
+    ? orderedProducts.filter(p => p.category === filterCategory).sort((a, b) => getFinalPrice(a) - getFinalPrice(b))
+    : products;
   // Drag-to-reorder only makes sense when the whole list fits on one page.
   const reorderable = canReorder && noFilters && total <= PAGE_SIZE;
 
@@ -379,7 +381,6 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         {/* Category tabs + search */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setFilterCategory("all")} className={`px-4 py-2 rounded-xl text-sm font-medium transition ${filterCategory === "all" ? "bg-indigo-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>All</button>
             {SHOP_CATEGORIES.map(cat => (
               <button key={cat.id} onClick={() => setFilterCategory(cat.id)} className={`px-4 py-2 rounded-xl text-sm font-medium transition ${filterCategory === cat.id ? "bg-indigo-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{cat.label}</button>
             ))}
