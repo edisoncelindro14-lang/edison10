@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, GripVertical, Radio } from "lucide-react";
+import { Search, ShoppingCart, X, Wallet, Check, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
-  productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, NETWORKS, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
+import ProductCard from "./ProductCard";
 import ProductEditModal from "./ProductEditModal";
 import JoytelCatalogPicker from "./JoytelCatalogPicker";
 import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
@@ -16,7 +16,6 @@ import { sortProductsByOrder, persistProductOrder } from "../lib/productSort";
 const PAGE_SIZE = 24;
 
 export default function Products() {
-  const nav = useNavigate();
   const [search, setSearch] = useState("");
   const [filterNetwork, setFilterNetwork] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -232,77 +231,28 @@ export default function Products() {
 
       {/* Product grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filtered.map((p, i) => {
-          const isAvailable = p.is_active !== false;
-          return (
-            <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-              draggable={reorderable}
-              onDragStart={reorderable ? (e) => handleDragStart(e, p.id) : undefined}
-              onDragOver={reorderable ? (e) => handleDragOver(e, p.id) : undefined}
-              onDrop={reorderable ? (e) => handleDrop(e, p.id) : undefined}
-              onDragEnd={reorderable ? () => { setDraggedId(null); setDragOverId(null); } : undefined}
-              className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group ${dragOverId === p.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"} ${draggedId === p.id ? "opacity-40" : ""} ${reorderable ? "cursor-grab active:cursor-grabbing" : ""}`}
-              onClick={() => nav(`/Products/${p.id}`)}>
-              {/* Not Available stamp */}
-              {!isAvailable && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 pointer-events-none">
-                  <span className="text-white font-extrabold text-lg bg-red-600 px-4 py-1 rounded-lg shadow-lg rotate-12">NOT AVAILABLE</span>
-                </div>
-              )}
-              {/* Drag handle + Edit button for admin/reseller */}
-              {canManage && (
-                <>
-                  {reorderable && (
-                    <div className="absolute top-2 left-2 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
-                      <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-                    </div>
-                  )}
-                  <button onClick={(e) => { e.stopPropagation(); setEditProduct(p); }}
-                    className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
-                    <Pencil className="w-3.5 h-3.5 text-gray-600" />
-                  </button>
-                </>
-              )}
-              <div className="h-24 overflow-hidden">
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-                    {productCategory(p) === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
-                  </div>
-                )}
-              </div>
-              <div className="p-4">
-                <div className="flex items-center gap-1.5">
-                  <p className="font-bold text-sm text-gray-900">{p.name}</p>
-                  {p.joytel_enabled && (
-                    <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                      <Radio className="w-2.5 h-2.5" /> JoyTel {joytelBadgeLabel(p)}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">{p.description || p.network}</p>
-                {p.joytel_enabled && (
-                  <div className="mt-1.5 space-y-0.5">
-                    {p.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {p.joytel_product_code}</p>}
-                    <p className="text-[10px] text-gray-400">{joytelTypeName(p)}{p.joytel_warehouse ? ` · ${p.joytel_warehouse}` : ""}</p>
-                  </div>
-                )}
-                <div className="flex items-center justify-between mt-3">
-                  <div>
-                    <p className="text-xl font-extrabold text-orange-600">{money(getFinalPrice(p, priceAdjustments))}</p>
-                    {p.discount_percent > 0 && <span className="text-xs text-gray-400 line-through">{money(p.price)}</span>}
-                  </div>
-                  <Button size="sm" disabled={!isAvailable}
-                    onClick={(e) => { e.stopPropagation(); addToCart(p); }}
-                    className={isAvailable ? "bg-orange-500 hover:bg-orange-600 text-white h-10 w-10 p-0" : "bg-gray-300 text-gray-400 cursor-not-allowed h-10 w-10 p-0"}>
-                    <ShoppingCart className="w-5 h-5" />
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
+        {filtered.map((p, i) => (
+          <ProductCard
+            key={p.id}
+            product={p}
+            index={i}
+            adjustments={priceAdjustments}
+            canManage={canManage}
+            canReorder={reorderable}
+            onEdit={setEditProduct}
+            onAddToCart={addToCart}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+            draggedId={draggedId}
+            dragOverId={dragOverId}
+            showRating={false}
+            showDescription
+            showJoytelBadge
+            showJoytelDetails
+          />
+        ))}
       </div>
 
 

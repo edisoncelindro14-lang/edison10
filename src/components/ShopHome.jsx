@@ -1,120 +1,19 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, ShoppingCart, X, Zap, Smartphone, Check, Star, ArrowRight, Plus, Pencil, GripVertical, Wallet, Link as LinkIcon, Radio } from "lucide-react";
+import { Search, ShoppingCart, X, Check, Star, ArrowRight, Plus, Wallet } from "lucide-react";
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor, isEsimProduct,
-  productCategory, joytelBadgeLabel, joytelTypeName, brandText } from "../lib/helpers";
+import { money, FALLBACK_PRODUCTS, SHOP_CATEGORIES,
+  getProductBadge, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelRecharge, needsMobile, deliveryFor, isEsimProduct } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
+import ProductCard from "./ProductCard";
 import ProductEditModal from "./ProductEditModal";
 import { sortProductsByOrder } from "../lib/productSort";
 
-function StarRating({ rating, count }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? "text-yellow-400 fill-yellow-400" : "text-gray-200"}`} />
-      ))}
-      <span className="text-xs text-gray-500 ml-1">{rating.toFixed(1)} ({count.toLocaleString()})</span>
-    </div>
-  );
-}
-
 const PAGE_SIZE = 24;
-
-function ProductCard({ product, adjustments, canManage, canReorder, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
-  const nav = useNavigate();
-  const isAvailable = product.is_active !== false;
-  const rating = getProductRating(product);
-  const reviewCount = getProductReviewCount(product);
-  const badge = getProductBadge(product);
-  const discount = getDiscountPercent(product);
-  const finalPrice = getFinalPrice(product, adjustments);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      draggable={canReorder}
-      onDragStart={canReorder ? (e) => onDragStart(e, product.id) : undefined}
-      onDragOver={canReorder ? (e) => onDragOver(e, product.id) : undefined}
-      onDrop={canReorder ? (e) => onDrop(e, product.id) : undefined}
-      onDragEnd={canReorder ? onDragEnd : undefined}
-      className={`bg-white rounded-2xl shadow border overflow-hidden hover:shadow-lg transition-all relative group cursor-pointer
-        ${dragOverId === product.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-100 hover:border-amber-300"}
-        ${draggedId === product.id ? "opacity-40" : ""}`}
-      onClick={() => nav(`/Products/${product.id}`)}
-    >
-      {!isAvailable && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 pointer-events-none">
-          <span className="text-white font-extrabold text-sm bg-red-600 px-3 py-1 rounded-lg shadow-lg rotate-12">NOT AVAILABLE</span>
-        </div>
-      )}
-      {/* Badges */}
-      <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
-        {badge === "best_seller" && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-500 text-white">BEST SELLER</span>}
-        {badge === "new" && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-500 text-white">NEW</span>}
-        {discount > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500 text-white">-{discount}%</span>}
-      </div>
-      {canManage && (
-        <>
-          {canReorder && (
-            <div className="absolute top-2 right-10 z-20 p-1.5 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 transition cursor-grab">
-              <GripVertical className="w-3.5 h-3.5 text-gray-500" />
-            </div>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); onEdit(product); }}
-            className="absolute top-2 right-2 z-20 p-2 bg-white/90 rounded-lg shadow opacity-0 group-hover:opacity-100 hover:bg-white transition">
-            <Pencil className="w-3.5 h-3.5 text-gray-600" />
-          </button>
-        </>
-      )}
-      <div className="h-32 overflow-hidden">
-        {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-            {productCategory(product) === "sim" ? <Smartphone className="w-10 h-10 text-white" /> : <Zap className="w-10 h-10 text-white" />}
-          </div>
-        )}
-      </div>
-      <div className="p-3">
-        <span className="text-[10px] text-gray-400 uppercase font-medium">{productCategory(product)}</span>
-        <div className="flex items-center gap-1.5">
-          <p className="font-bold text-sm text-gray-900 truncate">{brandText(product.name)}</p>
-          {canManage && product.joytel_enabled && (
-            <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-              <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}
-            </span>
-          )}
-        </div>
-        <div className="mt-1"><StarRating rating={rating} count={reviewCount} /></div>
-        {canManage && product.joytel_enabled && (
-          <div className="mt-1 space-y-0.5">
-            {product.joytel_product_code && <p className="text-[10px] text-blue-600 font-medium">Code: {product.joytel_product_code}</p>}
-            <p className="text-[10px] text-gray-400">{joytelTypeName(product)}{product.joytel_warehouse ? ` · ${product.joytel_warehouse}` : ""}</p>
-          </div>
-        )}
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <p className="text-lg font-extrabold text-orange-600">{money(finalPrice)}</p>
-            {product.discount_percent > 0 ? (
-              <span className="text-xs text-gray-400 line-through">{money(product.price)}</span>
-            ) : product.load_amount && <span className="text-xs text-gray-400 line-through">₱{product.load_amount}</span>}
-          </div>
-          <Button size="sm" disabled={!isAvailable}
-            onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
-            className={isAvailable ? "bg-orange-500 hover:bg-orange-600 text-white h-10 w-10 p-0" : "bg-gray-300 text-gray-400 cursor-not-allowed h-10 w-10 p-0"}>
-            <ShoppingCart className="w-5 h-5" />
-          </Button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
 
 export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const nav = useNavigate();
@@ -253,7 +152,10 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { adjustments: priceAdjustments, canManage, onEdit: setEditProduct, onAddToCart: addToCart };
+  const cardProps = {
+    adjustments: priceAdjustments, canManage, onEdit: setEditProduct, onAddToCart: addToCart,
+    showJoytelBadge: canManage, showJoytelDetails: canManage,
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -344,7 +246,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
             <h2 className="text-2xl font-bold text-gray-900">Best Sellers</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {bestSellerList.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
+            {bestSellerList.map((p, i) => <ProductCard key={p.id} product={p} index={i} {...cardProps} />)}
           </div>
         </section>
       )}
@@ -370,7 +272,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filtered.map(p => <ProductCard key={p.id} product={p} {...cardProps} />)}
+          {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} {...cardProps} />)}
         </div>
         {total > PAGE_SIZE && (
           <div className="flex items-center justify-center gap-3 mt-8">

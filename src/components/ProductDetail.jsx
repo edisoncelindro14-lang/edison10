@@ -9,6 +9,7 @@ import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
   productCategory, joytelBadgeLabel, joytelTypeName, networkLabel, brandText } from "../lib/helpers";
 import { Button, Input } from "./ui";
+import ProductCard from "./ProductCard";
 import ProductEditModal from "./ProductEditModal";
 
 export default function ProductDetail({ productId }) {
@@ -296,24 +297,8 @@ export default function ProductDetail({ productId }) {
         <section className="mt-12">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Related Products</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {relatedProducts.map(p => (
-              <Link key={p.id} to={`/Products/${p.id}`}>
-                <div className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden hover:shadow-lg hover:border-indigo-300 transition-all">
-                  <div className="h-28 overflow-hidden">
-                    {p.image_url ? (
-                      <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className={`h-full bg-gradient-to-br ${NETWORK_COLORS[p.network] || "from-gray-400 to-gray-600"} flex items-center justify-center`}>
-                        {productCategory(p) === "sim" ? <Smartphone className="w-8 h-8 text-white" /> : <Zap className="w-8 h-8 text-white" />}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="font-bold text-sm text-gray-900 truncate">{brandText(p.name)}</p>
-                    <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(getFinalPrice(p, priceAdjustments))}</p>
-                  </div>
-                </div>
-              </Link>
+            {relatedProducts.map((p, i) => (
+              <ProductCard key={p.id} product={p} index={i} adjustments={priceAdjustments} compact />
             ))}
           </div>
         </section>
