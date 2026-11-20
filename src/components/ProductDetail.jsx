@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { useTable, useCurrentMember, useProduct, useProductPage } from "../lib/useData";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { money, NETWORK_COLORS, FALLBACK_PRODUCTS,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
   productCategory, joytelBadgeLabel, joytelTypeName, networkLabel, brandText } from "../lib/helpers";
 import { Button, Input } from "./ui";
 import ProductEditModal from "./ProductEditModal";
@@ -28,6 +28,9 @@ export default function ProductDetail({ productId }) {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions");
+  const { data: shopSettings = [] } = useTable("system_settings");
+  // Admin-set surcharge per category (load / esim / sim), added to the displayed price.
+  const priceAdjustments = getCategoryAdjustments(shopSettings);
   const { product: fetchedProduct, isLoading: productsLoading, updateLocalRecord } = useProduct(id);
   const { data: sameCategory = [] } = useProductPage({ category: fetchedProduct?.category || "all", pageSize: 6, activeOnly: true });
   const { currentMember } = useCurrentMember(members);
@@ -62,7 +65,7 @@ export default function ProductDetail({ productId }) {
     );
   }
 
-  const finalPrice = getFinalPrice(product);
+  const finalPrice = getFinalPrice(product, priceAdjustments);
   const total = finalPrice * qty;
   const hasLoad = productCategory(product) === "load";
   const hasSim = productCategory(product) === "sim";
@@ -307,7 +310,7 @@ export default function ProductDetail({ productId }) {
                   </div>
                   <div className="p-3">
                     <p className="font-bold text-sm text-gray-900 truncate">{brandText(p.name)}</p>
-                    <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(getFinalPrice(p))}</p>
+                    <p className="text-lg font-extrabold text-indigo-600 mt-1">{money(getFinalPrice(p, priceAdjustments))}</p>
                   </div>
                 </div>
               </Link>

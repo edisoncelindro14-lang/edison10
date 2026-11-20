@@ -5,7 +5,7 @@ import { Zap, Smartphone, Search, ShoppingCart, X, Wallet, Check, Plus, Pencil, 
 import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage } from "../lib/useData";
-import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
+import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor,
   productCategory, joytelBadgeLabel, joytelTypeName } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
@@ -36,6 +36,9 @@ export default function Products() {
 
   const { data: members = [] } = useTable("members");
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions");
+  const { data: shopSettings = [] } = useTable("system_settings");
+  // Admin-set surcharge per category (load / esim / sim), added to every card's price.
+  const priceAdjustments = getCategoryAdjustments(shopSettings);
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok";
@@ -69,7 +72,7 @@ export default function Products() {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   function addToCart(product) {
-    cartAddToCart(product);
+    cartAddToCart(product, priceAdjustments);
     toast.success(`${product.name} added to cart`);
   }
 
@@ -287,7 +290,7 @@ export default function Products() {
                 )}
                 <div className="flex items-center justify-between mt-3">
                   <div>
-                    <p className="text-xl font-extrabold text-orange-600">{money(getFinalPrice(p))}</p>
+                    <p className="text-xl font-extrabold text-orange-600">{money(getFinalPrice(p, priceAdjustments))}</p>
                     {p.discount_percent > 0 && <span className="text-xs text-gray-400 line-through">{money(p.price)}</span>}
                   </div>
                   <Button size="sm" disabled={!isAvailable}

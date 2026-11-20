@@ -16,14 +16,14 @@ export function CartProvider({ children }) {
     try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch {}
   }, [cart]);
 
-  function addToCart(product) {
+  function addToCart(product, adjustments = null) {
     setCart(prev => {
       const existing = prev.find(i => i.id === product.id);
       if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
       // Lock in the discounted price at add-to-cart time so cart totals and
       // checkout charges match what was displayed, even if the admin later
-      // changes the product's discount.
-      return [...prev, { ...product, price: getFinalPrice(product), qty: 1 }];
+      // changes the product's discount or the category price adjustment.
+      return [...prev, { ...product, price: getFinalPrice(product, adjustments), qty: 1 }];
     });
   }
 

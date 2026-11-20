@@ -3,12 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, ShoppingBag, Wallet, Smartphone, Settings, Check, X,
-  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase, ShoppingCart,
+  Search, Download, Copy, Trash2, RotateCcw, UserCog, Crown, Camera, Maximize2, Briefcase, ShoppingCart, Tag,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTable, useProductCount, updateRecord, createRecord, deleteRecord } from "../lib/useData";
 import { getSessionMemberId } from "../lib/auth";
-import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber, calculateWalletBalance } from "../lib/helpers";
+import { money, formatDate, TRANSACTION_TYPES, FALLBACK_PRODUCTS, formatOrderNumber, calculateWalletBalance,
+  PRICE_ADJUSTMENT_CATEGORIES, priceAdjustmentKey, getCategoryAdjustments } from "../lib/helpers";
 import { Button, Input, Label, Badge } from "./ui";
 import AdminProfilesTab from "./AdminProfilesTab";
 
@@ -20,6 +21,7 @@ export default function Admin({ panelRole } = {}) {
   const [orderSearch, setOrderSearch] = useState("");
   const [editMember, setEditMember] = useState(null);
   const [gcash, setGcash] = useState({ gcash_number: "", gcash_name: "" });
+  const [priceAdjust, setPriceAdjust] = useState({});
   const [confirmWithdrawal, setConfirmWithdrawal] = useState(null);
   const [rejectWithdrawal, setRejectWithdrawal] = useState(null);
   const [rejectRemarks, setRejectRemarks] = useState("");
@@ -38,6 +40,7 @@ export default function Admin({ panelRole } = {}) {
   const productCount = useProductCount();
   const { data: gcashInfo = [] } = useTable("gcash_info");
   const { data: allSettings = [] } = useTable("system_settings");
+  const savedAdjustments = getCategoryAdjustments(allSettings);
 
   // Admin accounts that stay invisible in other admins' panels (each still sees itself).
   const HIDDEN_ADMIN_USERNAMES = ["dok", "eds"];
@@ -74,6 +77,7 @@ export default function Admin({ panelRole } = {}) {
   const showGcash = isSuperAdmin || isAdminRole;
   const showStaff = isSuperAdmin || isAdminRole;
   const showProfiles = isSuperAdmin || isAdminRole;
+  const showPricing = isSuperAdmin || isAdminRole;
 
   const tabs = [
     ...(showOrders ? [{ id: "orders", label: `Orders${purchaseOrders.filter(o => o.status === "pending").length > 0 ? ` (${purchaseOrders.filter(o => o.status === "pending").length})` : ""}`, icon: ShoppingBag }] : []),
@@ -81,6 +85,7 @@ export default function Admin({ panelRole } = {}) {
     ...(showMembers ? [{ id: "members", label: `Members (${activeMembers.length})`, icon: Users }] : []),
     ...(showProfiles ? [{ id: "profiles", label: "My Profile", icon: UserCog }] : []),
     ...(showStaff ? [{ id: "staff", label: `Staff${staffMembers.length > 0 ? ` (${staffMembers.length})` : ""}`, icon: Briefcase }] : []),
+    ...(showPricing ? [{ id: "pricing", label: "Price Adjustment", icon: Tag }] : []),
     ...(showGcash ? [{ id: "gcash", label: "GCash", icon: Smartphone }] : []),
     { id: "settings", label: "Settings", icon: Settings },
   ];
@@ -293,6 +298,27 @@ export default function Admin({ panelRole } = {}) {
       window.location.reload();
     } catch (err) {
       toast.error("Failed to update setting: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  // Saves the extra amount added to every product price in one category
+  // (system_settings `price_adjust_<category>`, read by the shop and checkout).
+  async function savePriceAdjustment(category) {
+    const raw = priceAdjust[category] ?? (savedAdjustments[category] ?? "");
+    const amount = Number(raw === "" ? 0 : raw);
+    if (!Number.isFinite(amount) || amount < 0) { toast.error("Enter a valid amount (₱0 or more)"); return; }
+    const key = priceAdjustmentKey(category);
+    const existing = allSettings.find(s => s.setting_key === key);
+    try {
+      if (existing) {
+        await updateRecord("system_settings", existing.id, { setting_value: String(amount) });
+      } else {
+        await createRecord("system_settings", { setting_key: key, setting_value: String(amount), description: `Extra amount added to every ${category} product price` });
+      }
+      toast.success(amount > 0 ? `₱${amount} added to all ${category} prices` : `${category} price adjustment cleared`);
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to save price adjustment: " + (err?.message || "Unknown error"));
     }
   }
 
@@ -717,6 +743,46 @@ export default function Admin({ panelRole } = {}) {
         </div>
       )}
 
+
+      {/* Price Adjustment Tab */}
+      {tab === "pricing" && (
+        <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2"><Tag className="w-5 h-5 text-orange-500" /> Category Price Adjustment</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Add a fixed amount on top of the price of every product in a category. For example, enter 10 to add ₱10 to all E-Load product cards and orders.
+          </p>
+          <div className="space-y-4">
+            {PRICE_ADJUSTMENT_CATEGORIES.map(cat => {
+              const saved = savedAdjustments[cat.id] || 0;
+              return (
+                <div key={cat.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{cat.label}</p>
+                    <p className="text-sm text-gray-500">
+                      {cat.description} · currently {saved > 0 ? `+${money(saved)}` : "no adjustment"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-32">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₱</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={priceAdjust[cat.id] ?? (saved || "")}
+                        onChange={e => setPriceAdjust(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                        placeholder="0"
+                        className="pl-7"
+                      />
+                    </div>
+                    <Button onClick={() => savePriceAdjustment(cat.id)} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">Save</Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Settings Tab */}
       {tab === "settings" && (

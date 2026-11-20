@@ -3,7 +3,7 @@ import { supabase, getSetting } from '../_lib/joytel-server.js';
 import {
   isJoytelProduct, joytelPreflight, placeJoytelFulfilment, walletOrderTid, checkRecharge, orderKey, isJoytelRecharge, cleanSerial,
 } from '../_lib/joytel-fulfill.js';
-import { getFinalPrice, calculateWalletBalance, FALLBACK_PRODUCTS } from '../../src/lib/helpers.js';
+import { getFinalPrice, getCategoryAdjustments, PRICE_ADJUSTMENT_CATEGORIES, priceAdjustmentKey, calculateWalletBalance, FALLBACK_PRODUCTS } from '../../src/lib/helpers.js';
 
 /**
  * POST /api/orders/wallet-pay
@@ -67,7 +67,13 @@ export default async function handler(req, res) {
       .maybeSingle();
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
-    // Prices always come from the database (or the built-in catalogue the shop shows when the table is empty).
+    // Prices always come from the database (or the built-in catalogue the shop shows when the table is empty),
+    // plus the admin's per-category surcharge (Admin panel → Price Adjustment).
+    const { data: adjustRows } = await supabase
+      .from('system_settings')
+      .select('setting_key,setting_value')
+      .in('setting_key', PRICE_ADJUSTMENT_CATEGORIES.map(c => priceAdjustmentKey(c.id)));
+    const adjustments = getCategoryAdjustments(adjustRows);
     const ids = [...new Set(items.map(i => String(i.product_id)))];
     const { data: dbProducts } = await supabase.from('products').select('*').in('id', ids);
     const byId = new Map((dbProducts || []).map(p => [String(p.id), p]));
@@ -80,7 +86,7 @@ export default async function handler(req, res) {
         const problem = joytelPreflight(product, member, i.delivery ?? delivery, i.qty);
         if (problem) return res.status(400).json({ error: problem });
       }
-      lines.push({ product, qty: i.qty, delivery: i.delivery ?? delivery, total: getFinalPrice(product) * i.qty });
+      lines.push({ product, qty: i.qty, delivery: i.delivery ?? delivery, total: getFinalPrice(product, adjustments) * i.qty });
     }
 
     const total = lines.reduce((s, l) => s + l.total, 0);

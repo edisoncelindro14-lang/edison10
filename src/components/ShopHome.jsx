@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { payFromWallet, summarizeOrders } from "../lib/orders";
 import { useTable, useCurrentMember, useProductPage, useProductCount } from "../lib/useData";
 import { money, FALLBACK_PRODUCTS, NETWORK_COLORS, NETWORKS, SHOP_CATEGORIES,
-  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor, isEsimProduct,
+  getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice, getCategoryAdjustments, calculateWalletBalance, isJoytelEsim, isJoytelRecharge, needsMobile, deliveryFor, isEsimProduct,
   productCategory, joytelBadgeLabel, joytelTypeName, brandText } from "../lib/helpers";
 import { useCart } from "../lib/CartContext";
 import { Button, Input } from "./ui";
@@ -26,14 +26,14 @@ function StarRating({ rating, count }) {
 
 const PAGE_SIZE = 24;
 
-function ProductCard({ product, canManage, canReorder, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
+function ProductCard({ product, adjustments, canManage, canReorder, onEdit, onAddToCart, onDragStart, onDragOver, onDrop, onDragEnd, draggedId, dragOverId }) {
   const nav = useNavigate();
   const isAvailable = product.is_active !== false;
   const rating = getProductRating(product);
   const reviewCount = getProductReviewCount(product);
   const badge = getProductBadge(product);
   const discount = getDiscountPercent(product);
-  const finalPrice = getFinalPrice(product);
+  const finalPrice = getFinalPrice(product, adjustments);
 
   return (
     <motion.div
@@ -141,6 +141,8 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const { data: members = [] } = useTable("members", { enabled: !readOnly });
   const { data: transactions = [], addLocalRecord: addLocalTx, refetch: refetchTx } = useTable("transactions", { enabled: !readOnly });
   const { data: shopSettings = [] } = useTable("system_settings");
+  // Admin-set surcharge per category (load / esim / sim), added to every card's price.
+  const priceAdjustments = getCategoryAdjustments(shopSettings);
   const { currentMember } = useCurrentMember(members);
   const memberRole0 = currentMember?.role;
   const canSeeInactive = !readOnly && (memberRole0 === "super_admin" || memberRole0 === "admin" || memberRole0 === "reseller" || currentMember?.username === "dok");
@@ -174,7 +176,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const showFallback = !topLoading && !productsLoading && total === 0 && noFilters;
   const orderedProducts = showFallback ? sortProductsByOrder(FALLBACK_PRODUCTS) : topProducts;
   const filtered = showFallback && filterCategory !== "sim"
-    ? orderedProducts.filter(p => p.category === filterCategory).sort((a, b) => getFinalPrice(a) - getFinalPrice(b))
+    ? orderedProducts.filter(p => p.category === filterCategory).sort((a, b) => getFinalPrice(a, priceAdjustments) - getFinalPrice(b, priceAdjustments))
     : products;
 
   const walletBalance = currentMember ? calculateWalletBalance(transactions, currentMember.id) : 0;
@@ -188,7 +190,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   function addToCart(product) {
-    cartAddToCart(product);
+    cartAddToCart(product, priceAdjustments);
     toast.success(`${product.name} added to cart`);
   }
 
@@ -251,7 +253,7 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
     setBuying(false);
   }
 
-  const cardProps = { canManage, onEdit: setEditProduct, onAddToCart: addToCart };
+  const cardProps = { adjustments: priceAdjustments, canManage, onEdit: setEditProduct, onAddToCart: addToCart };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">

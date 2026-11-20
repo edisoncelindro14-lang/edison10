@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { saveSetting } from "../_lib/joytel-server.js";
 import { isJoytelProduct, joytelPreflight } from "../_lib/joytel-fulfill.js";
-import { getFinalPrice, FALLBACK_PRODUCTS } from "../../src/lib/helpers.js";
+import { getFinalPrice, getCategoryAdjustments, PRICE_ADJUSTMENT_CATEGORIES, priceAdjustmentKey, FALLBACK_PRODUCTS } from "../../src/lib/helpers.js";
 
 // Creates a PayMongo Payment Link for a wallet top-up and records a
 // pending conversion_requests row. The wallet is only credited once
@@ -52,6 +52,12 @@ export default async function handler(req, res) {
     const { data: dbProducts } = await supabase.from("products").select("*").in("id", ids);
     const byId = new Map((dbProducts || []).map(p => [String(p.id), p]));
     const { data: member } = await supabase.from("members").select("id,username,full_name,email,phone").eq("id", member_id).maybeSingle();
+    // Admin-set surcharge per category (Admin panel → Price Adjustment).
+    const { data: adjustRows } = await supabase
+      .from("system_settings")
+      .select("setting_key,setting_value")
+      .in("setting_key", PRICE_ADJUSTMENT_CATEGORIES.map(c => priceAdjustmentKey(c.id)));
+    const adjustments = getCategoryAdjustments(adjustRows);
     cartItems = [];
     for (const i of items) {
       const product = byId.get(String(i.product_id)) || FALLBACK_PRODUCTS.find(p => String(p.id) === String(i.product_id));
@@ -63,7 +69,7 @@ export default async function handler(req, res) {
         const problem = joytelPreflight(product, member, i.delivery ?? delivery, qty);
         if (problem) return res.status(400).json({ error: problem });
       }
-      cartItems.push({ product_id: product.id, name: product.name, price: getFinalPrice(product), qty, category: product.category, ...(i.delivery ? { delivery: String(i.delivery) } : {}) });
+      cartItems.push({ product_id: product.id, name: product.name, price: getFinalPrice(product, adjustments), qty, category: product.category, ...(i.delivery ? { delivery: String(i.delivery) } : {}) });
     }
     parsedAmount = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
   }

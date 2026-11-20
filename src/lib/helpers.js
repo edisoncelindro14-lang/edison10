@@ -108,16 +108,40 @@ export function getProductBadge(product) {
   return product.best_seller ? "best_seller" : null;
 }
 
+// Categories whose prices the admin can adjust by a flat amount (Admin panel →
+// Price Adjustment tab). Saved in system_settings as `price_adjust_<category>`.
+export const PRICE_ADJUSTMENT_CATEGORIES = [
+  { id: "load", label: "E-Load", description: "All load products" },
+  { id: "esim", label: "eSIM", description: "All eSIM products" },
+  { id: "sim", label: "SIM Cards", description: "All physical SIM products" },
+];
+
+export const priceAdjustmentKey = category => `price_adjust_${category}`;
+
+/** Per-category surcharges from system_settings rows, e.g. { load: 10 }. */
+export function getCategoryAdjustments(settings = []) {
+  const adjustments = {};
+  for (const row of settings || []) {
+    const key = String(row?.setting_key || "");
+    if (!key.startsWith("price_adjust_")) continue;
+    const amount = Number(String(row.setting_value ?? "").replace(/"/g, ""));
+    if (Number.isFinite(amount) && amount > 0) adjustments[key.slice("price_adjust_".length)] = amount;
+  }
+  return adjustments;
+}
+
 // Actual price to charge/display once a discount is applied. Only honors the
 // explicit `discount_percent` field set via the admin toggle — the
 // load_amount/original_price fallbacks in getDiscountPercent() are cosmetic
 // badge-only heuristics and must not silently change what's charged.
-export function getFinalPrice(product) {
+// `adjustments` is the per-category surcharge map from getCategoryAdjustments().
+export function getFinalPrice(product, adjustments = null) {
   const discount = Number(product.discount_percent) || 0;
-  if (discount > 0 && discount < 100) {
-    return Math.round(Number(product.price || 0) * (1 - discount / 100));
-  }
-  return Number(product.price || 0);
+  const base = discount > 0 && discount < 100
+    ? Math.round(Number(product.price || 0) * (1 - discount / 100))
+    : Number(product.price || 0);
+  const surcharge = Number(adjustments?.[productCategory(product)]) || 0;
+  return Math.round(base + (surcharge > 0 ? surcharge : 0));
 }
 
 export function getDiscountPercent(product) {
