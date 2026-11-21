@@ -153,7 +153,6 @@ export default function ShopHome({ readOnly = false, headerSearch = "" }) {
 
   const cardProps = {
     adjustments: priceAdjustments, canManage, onEdit: setEditProduct, onAddToCart: addToCart,
-    showJoytelBadge: canManage, showJoytelDetails: canManage,
   };
 
   return (

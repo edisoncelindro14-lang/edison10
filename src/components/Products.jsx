@@ -247,10 +247,6 @@ export default function Products() {
             onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
             draggedId={draggedId}
             dragOverId={dragOverId}
-            showRating={false}
-            showDescription
-            showJoytelBadge
-            showJoytelDetails
           />
         ))}
       </div>
