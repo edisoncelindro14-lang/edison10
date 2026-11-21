@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ShoppingCart, Zap, Smartphone, Star, Pencil, GripVertical, Radio, Sparkles } from "lucide-react";
+import { ShoppingCart, Zap, Smartphone, Signal, Star, Pencil, GripVertical, Radio, Sparkles } from "lucide-react";
 import {
   money, NETWORK_COLORS, SHOP_CATEGORIES,
   getProductRating, getProductReviewCount, getProductBadge, getDiscountPercent, getFinalPrice,
@@ -29,9 +29,11 @@ function StarRating({ rating, count }) {
   );
 }
 
+const CATEGORY_ICONS = { load: Zap, sim: Smartphone, esim: Signal };
+
 /**
- * Shared horizontal (rectangle) product card used by the shop grids and the
- * related-products strip. `compact` renders the smaller related-products version.
+ * Shared horizontal (rectangle) product card used by every product grid:
+ * shop home, member shop and related products.
  */
 export default function ProductCard({
   product,
@@ -42,7 +44,6 @@ export default function ProductCard({
   showJoytelDetails = false,
   showRating = true,
   showDescription = false,
-  compact = false,
   canReorder = false,
   onEdit,
   onAddToCart,
@@ -59,6 +60,7 @@ export default function ProductCard({
   const discount = getDiscountPercent(product);
   const finalPrice = getFinalPrice(product, adjustments);
   const category = SHOP_CATEGORIES.find(c => c.id === productCategory(product));
+  const CategoryIcon = category ? CATEGORY_ICONS[category.id] : null;
   const MediaIcon = productCategory(product) === "sim" ? Smartphone : Zap;
 
   return (
@@ -72,8 +74,7 @@ export default function ProductCard({
       onDrop={canReorder ? (e) => onDrop(e, product.id) : undefined}
       onDragEnd={canReorder ? onDragEnd : undefined}
       onClick={() => nav(`/Products/${product.id}`)}
-      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300
-        ${compact ? "shadow-sm" : "shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:-translate-y-0.5 hover:shadow-lg"}
+      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg
         ${dragOverId === product.id ? "border-amber-500 ring-2 ring-amber-300" : "border-gray-200 hover:border-gray-300"}
         ${draggedId === product.id ? "opacity-40" : ""}
         ${canReorder ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
@@ -85,22 +86,22 @@ export default function ProductCard({
       )}
 
       {/* Best Choice ribbon */}
-      {isBestSeller && !compact && (
+      {isBestSeller && (
         <div className="flex items-center justify-center gap-1.5 bg-gray-900 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">
           <Sparkles className="w-3 h-3" /> Best Choice
         </div>
       )}
 
-      <div className={`flex flex-1 items-stretch gap-3 ${compact ? "p-2.5" : "p-3 sm:p-3.5"}`}>
+      <div className="flex flex-1 items-stretch gap-3 p-3 sm:p-3.5">
         {/* Thumbnail */}
-        <div className={`relative shrink-0 overflow-hidden rounded-xl ${compact ? "h-12 w-12" : "h-16 w-16 sm:h-20 sm:w-20"}`}>
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
           {product.image_url ? (
             <img src={product.image_url} alt={product.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           ) : (
             <div className={`relative h-full w-full bg-gradient-to-br ${NETWORK_COLORS[product.network] || "from-gray-400 to-gray-600"}`}>
               <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20 blur-lg" />
               <div className="relative flex h-full items-center justify-center">
-                <MediaIcon className="w-5 h-5 text-white" />
+                <MediaIcon className="w-6 h-6 text-white" />
               </div>
             </div>
           )}
@@ -126,7 +127,7 @@ export default function ProductCard({
         {/* Details */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-1.5">
-            <p className={`font-bold text-gray-900 ${compact ? "truncate text-sm" : "line-clamp-2 break-words text-sm sm:text-[15px]"}`}>{cardName(product.name)}</p>
+            <p className="line-clamp-2 break-words text-sm font-bold text-gray-900 sm:text-[15px]">{cardName(product.name)}</p>
             {showJoytelBadge && product.joytel_enabled && (
               <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700 ring-1 ring-blue-100">
                 <Radio className="w-2.5 h-2.5" /> Kabaro {joytelBadgeLabel(product)}
@@ -138,7 +139,7 @@ export default function ProductCard({
             <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{product.description || product.network}</p>
           )}
 
-          {showRating && !compact && (
+          {showRating && (
             <div className="mt-1"><StarRating rating={getProductRating(product)} count={getProductReviewCount(product)} /></div>
           )}
 
@@ -149,11 +150,11 @@ export default function ProductCard({
             </div>
           )}
 
-          {!compact && (category || discount > 0) && (
+          {(category || discount > 0) && (
             <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
               {category && (
-                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-100">
-                  <span>{category.icon}</span> {category.label}
+                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100">
+                  {CategoryIcon && <CategoryIcon className="w-3 h-3" />} {category.label}
                 </span>
               )}
               {discount > 0 && (
@@ -166,23 +167,22 @@ export default function ProductCard({
         {/* Price + action */}
         <div className="flex shrink-0 flex-col items-end justify-between gap-2">
           <div className="text-right">
-            <p className={`font-extrabold tracking-tight text-gray-900 ${compact ? "text-base" : "text-xl sm:text-2xl"}`}>{money(finalPrice)}</p>
-            {!compact && (product.discount_percent > 0 ? (
+            <p className="text-xl font-extrabold tracking-tight text-gray-900 sm:text-2xl">{money(finalPrice)}</p>
+            {product.discount_percent > 0 ? (
               <span className="text-[11px] text-gray-400 line-through">{money(product.price)}</span>
             ) : product.load_amount ? (
               <span className="text-[11px] text-gray-400 line-through">₱{product.load_amount}</span>
-            ) : null)}
+            ) : null}
           </div>
           {onAddToCart && (
             <button
               aria-label="Add to cart"
               disabled={!isAvailable}
               onClick={(e) => { e.stopPropagation(); onAddToCart(product); }}
-              className={`flex flex-shrink-0 items-center justify-center rounded-full shadow-md transition-all duration-200
-                ${compact ? "h-8 w-8" : "h-10 w-10"}
+              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full shadow-md transition-all duration-200
                 ${isAvailable ? "bg-emerald-600 text-white hover:scale-105 hover:bg-emerald-700" : "cursor-not-allowed bg-gray-200 text-gray-400"}`}
             >
-              <ShoppingCart className={compact ? "w-4 h-4" : "w-5 h-5"} />
+              <ShoppingCart className="w-5 h-5" />
             </button>
           )}
         </div>
